@@ -1,10 +1,10 @@
 {
   "name": "@lzwme/duplicate-file-cleaner",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "一个基于 `nodejs` 的重复文件删除工具。",
   "main": "index.js",
   "bin": {
-    "dfcleaner": "node bin/dfcleaner.js"
+    "dfcleaner": "bin/dfcleaner.js"
   },
   "repository": "https://github.com/lzwme/similar-file-clear.git",
   "author": {

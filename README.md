@@ -111,6 +111,14 @@ yarn && yarn start
 - 增加相似图片删除、目录归类功能
 - More...
 
+## 相关参考
+
+- https://www.npmjs.com/package/jimp
+- https://github.com/peterbraden/node-opencv
+- https://docs.opencv.org/4.3.0/d5/d10/tutorial_js_root.html
+- https://github.com/justadudewhohacks/face-api.js
+- https://www.cnblogs.com/mfoonirlee/p/6869130.html
+
 ## License
 
 `duplicate-file-cleaner` is released under the MIT license.

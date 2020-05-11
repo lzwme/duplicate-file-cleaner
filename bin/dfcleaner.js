@@ -1,5 +1,4 @@
-// #!/usr/bin/env node
-'use strict'
+#!/usr/bin/env node
 
 const program = require('commander');
 const color = require('console-log-colors').color;
