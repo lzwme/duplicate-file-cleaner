@@ -1,0 +1,36 @@
+# OS X
+.DS_Store*
+Icon?
+._*
+.idea
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+builder/windows
+builder/res
+
+# Linux
+.directory
+*~
+
+
+# npm
+node_modules
+dist
+*.log
+*.gz
+
+
+# Coveralls
+coverage
+
+# Benchmarking
+benchmarks/graphs
+
+*_bak
+compodoc/**
+typedoc/**
+reports/**
+.dfcleaner.config.js

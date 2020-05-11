@@ -1,0 +1,32 @@
+{
+    "compilerOptions": {
+        "baseUrl": "./lib",
+        "skipLibCheck": true,
+        "outDir": "./dist/",
+        "sourceMap": false,
+        "noImplicitThis": true,
+        "noImplicitAny": false,
+        "module": "commonjs",
+        "target": "esnext",
+        "moduleResolution": "node",
+        "esModuleInterop": true,
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
+        "allowSyntheticDefaultImports": true,
+        "allowJs": false,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "declaration": true,
+        "lib": ["es6", "es2017", "esnext", "dom", "webworker"],
+        "typeRoots" : ["./typings", "./node_modules/@types"]
+    },
+    "exclude": [
+        "dist",
+        "src",
+        "node_modules",
+        "**/node_modules/*"
+    ],
+    "include": [
+        "./lib"
+    ]
+}
