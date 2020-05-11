@@ -23,13 +23,13 @@ let dataCache = {
 };
 
 /** 根据配置信息决定是否删除文件 */
-function handlerDelFile(filePath: string) {
-  log.debug('尝试删除文件：', filePath);
+function handlerDelFile(filePath: string, isFile = true) {
+  // log.debug('尝试删除文件：', filePath);
 
   if (Array.isArray(config.exclude) && config.exclude.length) {
     for (let reg of config.exclude) {
       if (reg.test(filePath)) {
-        log.debug('config.exclude 规则命中，忽略删除文件', filePath);
+        log.debug('config.exclude 规则命中，忽略文件/目录：', filePath);
         return false;
       }
     }
@@ -38,16 +38,21 @@ function handlerDelFile(filePath: string) {
   if (Array.isArray(config.include) && config.include.length) {
     for (let reg of config.include) {
       if (reg.test(filePath)) {
-        log.debug('config.include 规则命中，删除文件', filePath);
-        fs.unlinkSync(filePath);
-        dataCache.fileDelCount++;
+        log.debug('config.include 规则命中，文件/目录：', filePath);
+        if (isFile) {
+          fs.unlinkSync(filePath);
+          dataCache.fileDelCount++;
+        }
         return true;
       }
     }
   } else {
-    log.debug('删除文件', filePath);
-    fs.unlinkSync(filePath);
-    dataCache.fileDelCount++;
+    if (isFile) {
+      log.debug('删除文件：', filePath);
+      fs.unlinkSync(filePath);
+      dataCache.fileDelCount++;
+    }
+
     return true;
   }
 
@@ -73,7 +78,7 @@ function clearDir(dir) {
     const fileStat = fs.statSync(filePath);
 
     if (config.isClearSubDir && fileStat.isDirectory()) {
-      subDirList.push(filePath);
+      if (handlerDelFile(filePath, false)) subDirList.push(filePath);
       continue;
     }
 

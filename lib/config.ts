@@ -20,14 +20,18 @@ export const getConfig = (cfg?) => {
     /** 是否不输出清理过程相关的信息提示 */
     isSilent: false,
     /** 文件排除规则。字符串、正则表达式或正则表达式数组。如设置，命中则不处理 */
-    exclude: null,
+    exclude: [/(\/|\\)(.git|node_modules)(\/|\\)/],
     /** 文件匹配规则。字符串、正则表达式或正则表达式数组。如设置，命中的文件才处理 */
     include: null,
     /** 配置文件路径 */
     configPath: CONF_FILE_NAME,
   };
 
-  if (cfg) Object.assign(config, cfg);
+  if (cfg) {
+    Object.keys(cfg).forEach(key => {
+      if (cfg[key] !== null) config[key] = cfg[key];
+    });
+  }
 
   config.include = formatRegRule(config.include);
   config.exclude = formatRegRule(config.exclude);

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+const fs = require('fs');
+const path = require('path');
 const program = require('commander');
 const color = require('console-log-colors').color;
 const pkg = require('../package.json');
@@ -36,7 +38,11 @@ function getConfig() {
 }
 
 function start() {
-    if (program.help) return;
+    if (!program.dir) {
+      if (!program.config || !fs.existsSync(path.resolve(program.config))) {
+        return console.log(program.helpInformation());
+      }
+    }
 
     const conf = getConfig();
     const log = utils.getLog(conf);
@@ -49,14 +55,14 @@ function start() {
 program
     .version(pkg.version, '-v, --version')
     .description(pkg.description + ` [version ${pkg.version}]`)
-    .option('-d, --dir [value]', '指定要清理的目录。默认为当前目录')
+    .option('-c, --config [filepath]', `配置文件 ${CONF_FILE_NAME} 的路径。`, CONF_FILE_NAME)
+    .option('-d, --dir [value]', '指定要清理的目录')
     .option('--file-min-size [value]', '最小文件大小。大于 0 时，小于该大小的文件将被清理', 0)
-    .option('--compare-all-dir [value]', '是否对进行所有目录比较。为 false 则只对同目录下文件进行比较和清理。默认 true', true)
-    .option('--clear-sub-dir [value]', '是否清理子目录。默认 true', true)
-    .option('--del-empty-dir [value]', '是否删除空目录。默认 true', true)
-    .option('-q, --silent [value]', '是否不输出清理过程相关的信息提示。默认 false', false)
-    .option('-c, --config [filepath]', `配置文件 ${CONF_FILE_NAME} 的路径。默认为当前执行目录或 Home 目录下`, CONF_FILE_NAME)
-    .option('--debug', `开启调试模式`, false)
-    .parse(process.argv)
+    .option('--compare-all-dir [value]', '是否对进行所有目录比较。为 false 则只对同目录下文件进行比较和清理。', true)
+    .option('--clear-sub-dir [value]', '是否清理子目录。', true)
+    .option('--del-empty-dir [value]', '是否删除空目录。', true)
+    .option('-q, --silent [value]', '是否不输出清理过程相关的信息提示。', false)
+    .option('--debug', `开启调试模式。`, false)
+    .parse(process.argv);
 
 start();

@@ -1,6 +1,6 @@
 {
   "name": "@lzwme/duplicate-file-cleaner",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "一个基于 `nodejs` 的重复文件删除工具。",
   "main": "index.js",
   "bin": {
