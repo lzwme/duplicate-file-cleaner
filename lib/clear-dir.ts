@@ -138,16 +138,16 @@ function clearDir(dir) {
 
 export function cleaner(cfg) {
   // 初始化配置参数
-  cfg = Object.assign(config, cfg);
+  Object.assign(config, cfg);
 
-  if (cfg.configPath) {
-    cfg.configPath = path.resolve(cfg.configPath);
-    if (fs.existsSync(cfg.configPath)) {
-      log.debug('读取配置文件', cfg.configPath);
-      Object.assign(config, require(cfg.configPath));
+  if (config.configPath) {
+    config.configPath = path.resolve(config.configPath);
+    if (fs.existsSync(config.configPath)) {
+      log.debug('读取配置文件', config.configPath);
+      Object.assign(config, require(config.configPath));
     }
   }
-  // 规整一下
+
   Object.assign(config, getConfig(cfg));
   log.debug('最终的配置信息：', config);
 

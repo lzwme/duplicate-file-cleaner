@@ -5,7 +5,7 @@
 module.exports = {
     /** 开启调试模式 */
     debug: false,
-    /** 最小文件大小。大于 0 时，小于该大小的文件将被清理 */
+    /** 最小文件大小(KB)。大于 0 时，小于该大小的文件将被清理 */
     fileMinSize: 0,
     /** 要清理的文件根目录 */
     baseDir: process.cwd(),
