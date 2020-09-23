@@ -6,3 +6,6 @@ yarn.lock
 package-lock.json
 .dfcleaner.config.js
 .editorconfig
+tsconfig.json
+lib
+scripts
