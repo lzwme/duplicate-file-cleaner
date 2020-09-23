@@ -32,9 +32,9 @@
     "clean": "node scripts/rmdir.js ./dist"
   },
   "dependencies": {
-    "commander": "^5.1.0",
-    "console-log-colors": "^0.0.2",
-    "jimp": "^0.10.3"
+    "commander": "^6.1.0",
+    "console-log-colors": "^0.0.3",
+    "jimp": "^0.16.3"
   },
   "devDependencies": {
     "@types/node": "^13.13.5",

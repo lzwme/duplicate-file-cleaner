@@ -34,3 +34,6 @@ compodoc/**
 typedoc/**
 reports/**
 .dfcleaner.config.js
+
+package-lock.json
+yarn.lock
