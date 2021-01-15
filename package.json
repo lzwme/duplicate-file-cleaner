@@ -33,8 +33,7 @@
   },
   "dependencies": {
     "commander": "^6.1.0",
-    "console-log-colors": "^0.0.3",
-    "jimp": "^0.16.3"
+    "console-log-colors": "^0.0.3"
   },
   "devDependencies": {
     "@types/node": "^13.13.5",
