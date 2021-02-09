@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const program = require('commander');
+const { program } = require('commander');
 const color = require('console-log-colors').color;
 const pkg = require('../package.json');
 const { cleaner, utils, CONF_FILE_NAME } = require('../');
@@ -10,28 +10,30 @@ const { cleaner, utils, CONF_FILE_NAME } = require('../');
 /**
  * 获取配置信息
  */
-function getConfig() {
+function getConfig(options) {
+    if (!options) options = program.opts();
+
     const config = {
         /** 要清理的文件根目录 */
-        baseDir: program.dir || process.cwd(),
+        baseDir: options.dir || process.cwd(),
         /** 最小文件大小。大于 0 时，小于该大小的文件将被清理 */
-        fileMinSize: program.fileMinSize || 0,
+        fileMinSize: options.fileMinSize || 0,
         /** 是否对进行所有目录比较。为 false 则只对同目录下文件进行比较和清理 */
-        compareAllDir: program.compareAllDir !== void 0,
+        compareAllDir: options.compareAllDir !== void 0,
         /** 是否清理子目录 */
-        isClearSubDir: program.clearSubDir !== void 0,
+        isClearSubDir: options.clearSubDir !== void 0,
         /** 是否删除空目录 */
-        isDelEmptyDir: program.delEmptyDir !== void 0,
+        isDelEmptyDir: options.delEmptyDir !== void 0,
         /** 是否不输出清理过程相关的信息提示 */
-        isSilent: !!program.silent,
+        isSilent: !!options.silent,
         /** 文件排除规则。如设置，命中则不处理 */
         extend: null,
         /** 文件匹配规则。如设置，命中的文件才处理 */
         include: null,
         /** 配置文件路径。如存在，该文件中的优先级更高 */
-        configPath: program.config,
+        configPath: options.config,
         /** 开启调试模式 */
-        debug: !!program.debug,
+        debug: !!options.debug,
     };
 
     if (config.configPath) {
@@ -41,20 +43,22 @@ function getConfig() {
       }
     }
 
-    if (typeof program.debug === 'boolean') config.debug = program.debug;
-    if (typeof program.silent === 'boolean') config.isSilent = program.silent;
+    if (typeof options.debug === 'boolean') config.debug = options.debug;
+    if (typeof options.silent === 'boolean') config.isSilent = options.silent;
 
     return config;
 }
 
 function start() {
-    if (!program.dir) {
-      if (!program.config || !fs.existsSync(path.resolve(program.config))) {
-        return console.log(program.helpInformation());
+    const options = program.opts();
+
+    if (!options.dir) {
+      if (!options.config || !fs.existsSync(path.resolve(options.config))) {
+        return console.log(options.helpInformation());
       }
     }
 
-    const conf = getConfig();
+    const conf = getConfig(options);
     const log = utils.getLog(conf);
     // log.debug(conf);
     const result = cleaner(conf);
