@@ -1,8 +1,8 @@
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
 // import { color } from 'console-log-colors';
-import { utils } from './utils';
-import { getConfig } from './config';
+import { utils } from "./utils";
+import { getConfig } from "./config";
 
 interface PlainObject {
   [key: string]: any;
@@ -29,7 +29,7 @@ function handlerDelFile(filePath: string, isFile = true) {
   if (Array.isArray(config.exclude) && config.exclude.length) {
     for (let reg of config.exclude) {
       if (reg.test(filePath)) {
-        log.debug('config.exclude 规则命中，忽略文件/目录：', filePath);
+        log.debug("config.exclude 规则命中，忽略文件/目录：", filePath);
         return false;
       }
     }
@@ -38,9 +38,9 @@ function handlerDelFile(filePath: string, isFile = true) {
   if (Array.isArray(config.include) && config.include.length) {
     for (let reg of config.include) {
       if (reg.test(filePath)) {
-        log.debug('config.include 规则命中，文件/目录：', filePath);
+        log.debug("config.include 规则命中，文件/目录：", filePath);
         if (isFile) {
-          fs.unlinkSync(filePath);
+          if (!config.dryRun) fs.unlinkSync(filePath);
           dataCache.fileDelCount++;
         }
         return true;
@@ -48,8 +48,8 @@ function handlerDelFile(filePath: string, isFile = true) {
     }
   } else {
     if (isFile) {
-      log.debug('删除文件：', filePath);
-      fs.unlinkSync(filePath);
+      log.debug("删除文件：", filePath);
+      if (!config.dryRun) fs.unlinkSync(filePath);
       dataCache.fileDelCount++;
     }
 
@@ -60,19 +60,19 @@ function handlerDelFile(filePath: string, isFile = true) {
 }
 
 function clearDir(dir) {
-  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return;
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return false;
 
   const fileList = fs.readdirSync(dir);
   const md5Cache = {};
   const subDirList = [];
   let delFileCount = 0;
 
-  log.log('\n');
-  log.info('开始清理目录：', dir);
-  log.info('当前目录中总文件/子目录数：', fileList.length);
+  log.log("\n");
+  log.info("开始清理目录：", dir);
+  log.info("当前目录中总文件/子目录数：", fileList.length);
 
   for (let filename of fileList) {
-    if (!filename || ['.', '..'].includes(filename)) continue;
+    if (!filename || [".", ".."].includes(filename)) continue;
 
     const filePath = path.resolve(dir, filename);
     const fileStat = fs.statSync(filePath);
@@ -88,7 +88,7 @@ function clearDir(dir) {
       dataCache.fileTotalCount++;
 
       if (md5Cache[md5]) {
-        if(handlerDelFile(filePath)) delFileCount++;
+        if (handlerDelFile(filePath)) delFileCount++;
       } else {
         md5Cache[md5] = filePath;
 
@@ -96,7 +96,7 @@ function clearDir(dir) {
           if (!dataCache.md5AllCache[md5]) {
             dataCache.md5AllCache[md5] = filePath;
           } else {
-            if(handlerDelFile(filePath)) {
+            if (handlerDelFile(filePath)) {
               delFileCount++;
             }
             continue;
@@ -106,7 +106,7 @@ function clearDir(dir) {
         // 小文件清理
         if (config.fileMinSize > 0) {
           if (fileStat.size / 1024 < config.fileMinSize) {
-            if(handlerDelFile(filePath)) {
+            if (handlerDelFile(filePath)) {
               dataCache.minSizeCount++;
               delFileCount++;
               if (dataCache[filePath]) delete dataCache[filePath];
@@ -118,8 +118,8 @@ function clearDir(dir) {
     }
   }
 
-  log.info('清理完毕！剩余文件/子目录：', fileList.length - delFileCount);
-  if (dataCache.minSizeCount) log.info('清理的小文件件数量为：', dataCache.minSizeCount);
+  log.info("清理完毕！剩余文件/子目录：", fileList.length - delFileCount);
+  if (dataCache.minSizeCount) log.info("清理的小文件件数量为：", dataCache.minSizeCount);
 
   // 清理子目录
   if (subDirList.length) {
@@ -130,10 +130,12 @@ function clearDir(dir) {
 
   if (config.isDelEmptyDir) {
     if (!fs.readdirSync(dir).length) {
-      log.info('移除空目录：', dir);
-      fs.rmdirSync(dir);
+      log.info("移除空目录：", dir);
+      if (!config.dryRun) fs.rmdirSync(dir);
     }
   }
+
+  return true;
 }
 
 export function cleaner(cfg) {
@@ -143,22 +145,28 @@ export function cleaner(cfg) {
   if (config.configPath) {
     config.configPath = path.resolve(config.configPath);
     if (fs.existsSync(config.configPath)) {
-      log.debug('读取配置文件', config.configPath);
+      log.debug("读取配置文件", config.configPath);
       Object.assign(config, require(config.configPath));
     }
   }
 
   Object.assign(config, getConfig(cfg));
-  log.debug('最终的配置信息：', config);
+  log.debug("最终的配置信息：", config);
 
   // 初始化缓存数据
-  Object.keys(dataCache).forEach(key => {
-    if (typeof dataCache[key] === 'number') {
+  Object.keys(dataCache).forEach((key) => {
+    if (typeof dataCache[key] === "number") {
       dataCache[key] = 0;
     } else dataCache[key] = {};
   });
 
-  clearDir(config.baseDir);
+  if (config.dryRun) {
+    log.info("演示模式");
+  }
+
+  if (!clearDir(config.baseDir)) {
+    log.info("指定的目录不存在：", config.baseDir);
+  }
 
   return dataCache;
 }

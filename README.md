@@ -26,13 +26,13 @@
 
 ```bash
 npm i -g @lzwme/duplicate-file-cleaner
-dfc -h
+dfcleaner -h
 ```
 
 将输出 `help` 帮助信息：
 
 ```bash
-Usage: dfc [options]
+Usage: dfcleaner [options]
 
 一个基于 `nodejs` 的重复文件删除工具。 [version 1.0.0]
 
@@ -53,7 +53,7 @@ Options:
 
 ```bash
 # 对 test-dir 目录及其子目录下的所有文件进行重复文件清理
-dfc -d test-dir
+dfcleaner -d test-dir
 ```
 
 ### API 调用用法示例
