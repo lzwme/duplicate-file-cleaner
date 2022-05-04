@@ -4,6 +4,8 @@ publish.bat
 .eslintrc
 yarn.lock
 package-lock.json
+pnpm-lock.yaml
+.pnpm-debug.log
 .dfcleaner.config.js
 .editorconfig
 tsconfig.json

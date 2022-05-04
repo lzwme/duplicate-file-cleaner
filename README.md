@@ -117,7 +117,6 @@ yarn && yarn start
 - https://github.com/peterbraden/node-opencv
 - https://docs.opencv.org/4.3.0/d5/d10/tutorial_js_root.html
 - https://github.com/justadudewhohacks/face-api.js
-- https://www.cnblogs.com/mfoonirlee/p/6869130.html
 
 ## License
 

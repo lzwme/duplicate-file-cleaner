@@ -3,7 +3,7 @@
   "version": "1.1.0",
   "description": "一个基于 Node.js 的重复文件删除工具。",
   "main": "index.js",
-  "typings": "type.d.ts",
+  "typings": "./dist/index.d.ts",
   "bin": {
     "dfcleaner": "dist/cli.js"
   },
