@@ -5,9 +5,13 @@
   "main": "index.js",
   "typings": "./dist/index.d.ts",
   "bin": {
-    "dfcleaner": "dist/cli.js"
+    "dfcleaner": "bin/dfcleaner.js"
   },
   "repository": "https://github.com/lzwme/duplicate-file-cleaner.git",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.com",
+    "access": "public"
+  },
   "author": {
     "name": "renxia",
     "email": "lzwy0820@qq.com",
@@ -15,8 +19,9 @@
   },
   "license": "MIT",
   "engines": {
-    "node": ">=8"
+    "node": ">=12"
   },
+  "packageManager": "pnpm@7.5.0",
   "keywords": [
     "cleaner",
     "重复文件",
@@ -28,16 +33,17 @@
   "scripts": {
     "start": "npm run dev",
     "dev": "tsc -w",
+    "build": "tsc",
     "test": "node test/test.js",
-    "release": "npm run clean && tsc && echo done!",
+    "release": "npm run clean && npm run build && echo done!",
     "clean": "node scripts/rmdir.js ./dist"
   },
   "dependencies": {
-    "commander": "^9.2.0",
+    "commander": "^9.3.0",
     "console-log-colors": "^0.2.3"
   },
   "devDependencies": {
-    "@types/node": "^16",
-    "typescript": "^4.6.4"
+    "@types/node": "^18.0.1",
+    "typescript": "^4.7.4"
   }
 }

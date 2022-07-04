@@ -51,25 +51,6 @@ function getConfig(options) {
   return config;
 }
 
-function start() {
-  const options = program.opts();
-
-  if (!options.dir) {
-    if (!options.config || !fs.existsSync(path.resolve(options.config))) {
-      return program.help();
-    }
-  }
-
-  const conf = getConfig(options);
-  const log = utils.getLog(conf);
-  // log.debug(conf);
-  const result = cleaner(conf);
-  log.log("\n");
-  log.sucess(
-    `清理完成！共处理了 ${color.green(result.fileTotalCount)} 个文件与目录，删除了 ${color.red(result.fileDelCount)} 个文件与目录`
-  );
-}
-
 program
   .version(pkg.version, "-v, --version")
   .description(color.yellowBright(pkg.description) + ` [version ${pkg.version}]`)
@@ -83,6 +64,20 @@ program
   .option("--dry-run", "演示模式，不执行真正的文件清理")
   .option("-q, --silent", "静默模式")
   .option("--debug", `开启调试模式`)
-  .parse(process.argv);
+  .action((options) => {
+    if (!options.dir) {
+      if (!options.config || !fs.existsSync(path.resolve(options.config))) {
+        return program.help();
+      }
+    }
 
-start();
+    const conf = getConfig(options);
+    const log = utils.getLog(conf);
+    // log.debug(conf);
+    const result = cleaner(conf);
+    log.log("\n");
+    log.sucess(
+      `清理完成！共处理了 ${color.green(result.fileTotalCount)} 个文件与目录，删除了 ${color.red(result.fileDelCount)} 个文件与目录`
+    );
+  })
+  .parse(process.argv);
