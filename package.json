@@ -21,7 +21,7 @@
   "engines": {
     "node": ">=12"
   },
-  "packageManager": "pnpm@7.5.0",
+  "packageManager": "pnpm@8.5.0",
   "keywords": [
     "cleaner",
     "重复文件",
@@ -39,11 +39,11 @@
     "clean": "node scripts/rmdir.js ./dist"
   },
   "dependencies": {
-    "commander": "^9.4.1",
-    "console-log-colors": "^0.3.3"
+    "commander": "^11.0.0",
+    "console-log-colors": "^0.4.0"
   },
   "devDependencies": {
-    "@types/node": "^18.11.9",
-    "typescript": "^4.9.3"
+    "@types/node": "^20.6.1",
+    "typescript": "^5.2.2"
   }
 }
