@@ -38,7 +38,7 @@ const pickTrashPath = (trashDir: string, relPath: string): string => {
   return candidate;
 };
 
-const moveToTrash = async (file: FileInfo, trashDir: string): Promise<void> => {
+const moveToTrash = async (file: FileInfo, trashDir: string): Promise<string> => {
   const target = pickTrashPath(trashDir, file.relPath);
   await ensureDir(path.dirname(target));
 
@@ -51,6 +51,8 @@ const moveToTrash = async (file: FileInfo, trashDir: string): Promise<void> => {
     await fs.promises.copyFile(file.path, target);
     await fs.promises.unlink(file.path);
   }
+
+  return target;
 };
 
 /**
@@ -75,7 +77,7 @@ export const deleteFiles = async (
 
     try {
       if (options.trashDir) {
-        await moveToTrash(target.file, options.trashDir);
+        record.trashedTo = await moveToTrash(target.file, options.trashDir);
         record.status = "trashed";
       } else {
         await fs.promises.unlink(target.file.path);

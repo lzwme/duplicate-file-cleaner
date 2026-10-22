@@ -3,8 +3,10 @@ import path from "node:path";
 import { CleanerError } from "./error";
 import { normalizeRules } from "./matcher";
 import {
+  DETECT_MODES,
   KEEP_STRATEGIES,
   type CleanerConfig,
+  type DetectMode,
   type KeepStrategy,
   type ResolveConfigOptions,
   type RuleInput,
@@ -33,6 +35,7 @@ export const DEFAULT_EXCLUDE = [
   "Thumbs.db",
   ".dfcleaner-trash",
   ".dfcleanerignore",
+  ".dfcleaner-cache.json",
   ".dfcleaner.config.js",
   ".dfcleaner.config.cjs",
   ".dfcleaner.config.json",
@@ -61,6 +64,12 @@ const KNOWN_KEYS = new Set([
   "preferDirs",
   "trashDir",
   "maxDeleteRatio",
+  "cacheFile",
+  "detect",
+  "similarImages",
+  "similarThreshold",
+  "deleteSimilarImages",
+  "progress",
   "silent",
   "debug",
   "reportFile",
@@ -93,6 +102,12 @@ export const DEFAULT_CONFIG: CleanerConfig = {
   preferDirs: [],
   trashDir: null,
   maxDeleteRatio: 0,
+  cacheFile: null,
+  detect: "exact",
+  similarImages: false,
+  similarThreshold: 5,
+  deleteSimilarImages: false,
+  progress: true,
   silent: false,
   debug: false,
   reportFile: null,
@@ -227,6 +242,14 @@ export const resolveConfig = (
     );
   }
 
+  const detect = String(merged.detect || "exact") as DetectMode;
+  if (!DETECT_MODES.includes(detect)) {
+    throw new CleanerError(
+      `非法的检测模式：${detect}，可选值：${DETECT_MODES.join(", ")}`,
+      "INVALID_CONFIG"
+    );
+  }
+
   const config: CleanerConfig = {
     baseDir: path.resolve(cwd, String(merged.baseDir || cwd)),
     configPath,
@@ -250,6 +273,17 @@ export const resolveConfig = (
     preferDirs: toStringArray(merged.preferDirs).map((dir) => path.resolve(cwd, dir)),
     trashDir: merged.trashDir ? path.resolve(cwd, String(merged.trashDir)) : null,
     maxDeleteRatio: Math.min(1, Math.max(0, toNumber(merged.maxDeleteRatio, 0))),
+    cacheFile:
+      merged.cacheFile === true
+        ? path.resolve(cwd, ".dfcleaner-cache.json")
+        : merged.cacheFile
+          ? path.resolve(cwd, String(merged.cacheFile))
+          : null,
+    detect,
+    similarImages: toBool(merged.similarImages, false),
+    similarThreshold: Math.min(64, Math.max(0, Math.round(toNumber(merged.similarThreshold, 5)))),
+    deleteSimilarImages: toBool(merged.deleteSimilarImages, false),
+    progress: toBool(merged.progress, true),
     silent: toBool(merged.silent, false),
     debug: toBool(merged.debug, false),
     reportFile: merged.reportFile ? path.resolve(cwd, String(merged.reportFile)) : null,

@@ -58,6 +58,23 @@ export const scanFiles = async (
 
   const visitedRealPaths = new Set([baseRealPath]);
 
+  const progressStarted = Date.now();
+  let lastProgressAt = 0;
+  const reportProgress = () => {
+    if (!reporter?.onProgress) return;
+    const now = Date.now();
+    if (now - lastProgressAt < 200) return;
+    lastProgressAt = now;
+    const elapsedMs = now - progressStarted;
+    reporter.onProgress({
+      phase: "scan",
+      processed: stats.files + stats.dirs,
+      bytes: stats.bytes,
+      elapsedMs,
+      speed: elapsedMs > 0 ? Math.round((stats.bytes * 1000) / elapsedMs) : undefined,
+    });
+  };
+
   const walk = async (dir: string, relDir: string, depth: number): Promise<void> => {
     signal?.throwIfAborted();
 
@@ -73,6 +90,7 @@ export const scanFiles = async (
 
     for (const entry of entries) {
       signal?.throwIfAborted();
+      reportProgress();
 
       const relPath = relDir ? `${relDir}/${entry.name}` : entry.name;
       const fullPath = path.join(dir, entry.name);
@@ -155,6 +173,17 @@ export const scanFiles = async (
   };
 
   await walk(config.baseDir, "", 0);
+
+  if (reporter?.onProgress) {
+    const elapsedMs = Date.now() - progressStarted;
+    reporter.onProgress({
+      phase: "scan",
+      processed: stats.files + stats.dirs,
+      bytes: stats.bytes,
+      elapsedMs,
+      speed: elapsedMs > 0 ? Math.round((stats.bytes * 1000) / elapsedMs) : undefined,
+    });
+  }
 
   // 排序保证跨平台、跨文件系统的确定性
   files.sort((a, b) => a.relPath.localeCompare(b.relPath));

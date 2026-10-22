@@ -26,6 +26,27 @@ export const KEEP_STRATEGIES: readonly KeepStrategy[] = [
   "longest-path",
 ];
 
+/** 检测模式：精确去重 / 重复目录 / 两者 */
+export type DetectMode = "exact" | "dir" | "both";
+
+export const DETECT_MODES: readonly DetectMode[] = ["exact", "dir", "both"];
+
+/** 进度信息 */
+export interface ProgressInfo {
+  phase: "scan" | "hash" | "dir" | "similar" | "delete";
+  /** 已处理条目数 */
+  processed: number;
+  /** 总条目数（未知时为空） */
+  total?: number;
+  /** 已处理字节数 */
+  bytes: number;
+  /** 总字节数（未知时为空） */
+  bytesTotal?: number;
+  elapsedMs: number;
+  /** 字节/秒 */
+  speed?: number;
+}
+
 /** 扫描到的文件元信息 */
 export interface FileInfo {
   /** 绝对路径 */
@@ -107,6 +128,18 @@ export interface CleanerConfig {
   trashDir: string | null;
   /** 允许删除的文件比例上限，0 表示不限制 */
   maxDeleteRatio: number;
+  /** 哈希缓存文件，null 表示不启用 */
+  cacheFile: string | null;
+  /** 检测模式 */
+  detect: DetectMode;
+  /** 是否检测相似图片 */
+  similarImages: boolean;
+  /** 相似图片汉明距离阈值 */
+  similarThreshold: number;
+  /** 是否删除相似图片（默认仅报告） */
+  deleteSimilarImages: boolean;
+  /** 是否输出进度 */
+  progress: boolean;
   /** 是否静默 */
   silent: boolean;
   /** 是否调试 */
@@ -143,6 +176,8 @@ export interface DeleteRecord {
   hash?: string;
   status: DeleteStatus;
   error?: string;
+  /** 移入回收站后的目标路径 */
+  trashedTo?: string;
 }
 
 /** 重复文件组 */
@@ -152,8 +187,32 @@ export interface DuplicateGroup {
   files: FileInfo[];
   keep: FileInfo[];
   remove: FileInfo[];
+  /** 指向同一 inode 的硬链接（不参与删除，也不计入可释放空间） */
+  hardlinks: FileInfo[];
   /** 该组可释放的字节数 */
   savedBytes: number;
+}
+
+/** 重复目录组（目录内容树完全一致） */
+export interface DuplicateDirGroup {
+  hash: string;
+  /** 组内所有目录（绝对路径） */
+  dirs: string[];
+  keep: string[];
+  remove: string[];
+  fileCount: number;
+  size: number;
+}
+
+/** 相似图片组 */
+export interface SimilarGroup {
+  /** 首个文件的感知哈希 */
+  hash: string;
+  /** 组内最大汉明距离 */
+  distance: number;
+  files: FileInfo[];
+  keep: FileInfo[];
+  remove: FileInfo[];
 }
 
 /** 清理统计 */
@@ -174,6 +233,14 @@ export interface CleanStats {
   emptyDirsRemoved: number;
   skippedSmallFiles: number;
   skippedSymlinks: number;
+  /** 因硬链接而未计入可释放空间/未删除的文件数 */
+  hardlinksSkipped: number;
+  /** 重复目录组数 */
+  duplicateDirs: number;
+  /** 相似图片组数 */
+  similarGroups: number;
+  /** 哈希缓存命中次数 */
+  cacheHits: number;
   errors: ScanError[];
 }
 
@@ -184,6 +251,8 @@ export interface CleanResult {
   config: CleanerConfig;
   scan: ScanStats;
   groups: DuplicateGroup[];
+  dirGroups: DuplicateDirGroup[];
+  similarGroups: SimilarGroup[];
   deleted: DeleteRecord[];
   removedEmptyDirs: DeleteRecord[];
   stats: CleanStats;
@@ -194,8 +263,11 @@ export interface Reporter {
   onScanStart?(baseDir: string): void;
   onScanFile?(file: FileInfo): void;
   onGroup?(group: DuplicateGroup): void;
+  onDirGroup?(group: DuplicateDirGroup): void;
+  onSimilarGroup?(group: SimilarGroup): void;
   onDelete?(record: DeleteRecord): void;
   onEmptyDir?(record: DeleteRecord): void;
+  onProgress?(info: ProgressInfo): void;
   onWarning?(message: string): void;
   summary?(result: CleanResult): void;
 }

@@ -31,10 +31,18 @@ module.exports = {
   exclude: ['.git', 'node_modules'],
   /** 文件匹配规则。glob 字符串、正则表达式或正则表达式数组。如设置，命中的文件才处理 */
   include: [],
+  /** 检测模式：exact | dir | both */
+  detect: 'exact',
   /** 哈希算法与头部采样大小（字节） */
   algorithm: 'sha256',
   sampleSize: 4096,
   concurrency: 8,
+  /** 哈希缓存文件，null 表示关闭 */
+  cacheFile: null,
+  /** 相似图片检测（需要可选依赖 jimp） */
+  similarImages: false,
+  similarThreshold: 5,
+  deleteSimilarImages: false,
   /** 允许删除的文件比例上限，0 表示不限制 */
   maxDeleteRatio: 0,
   /** 回收站目录，设置后删除改为移动 */

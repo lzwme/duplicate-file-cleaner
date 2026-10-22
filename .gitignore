@@ -37,4 +37,4 @@ reports/**
 
 package-lock.json
 yarn.lock
-pnpm-lock.yaml
+# pnpm-lock.yaml 需要提交，确保 CI 与发布可复现

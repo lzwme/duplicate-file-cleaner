@@ -1,7 +1,7 @@
 {
   "name": "@lzwme/duplicate-file-cleaner",
-  "version": "2.0.0",
-  "description": "一个基于 Node.js 的重复文件清理工具。",
+  "version": "2.1.0",
+  "description": "一个基于 Node.js 的重复文件/重复目录/相似图片清理工具。",
   "main": "index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -20,7 +20,8 @@
     "dist",
     "index.js",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "repository": "https://github.com/lzwme/duplicate-file-cleaner.git",
   "publishConfig": {
@@ -38,28 +39,41 @@
   },
   "keywords": [
     "cleaner",
+    "duplicate",
+    "duplicate-files",
+    "duplicate-directories",
+    "similar-images",
     "重复文件",
-    "文件清理",
-    "图片清理",
+    "重复目录",
     "相似图片",
+    "文件清理",
     "文件删除"
   ],
   "scripts": {
-    "start": "npm run dev",
+    "start": "pnpm dev",
     "dev": "tsc -w",
     "build": "tsc",
     "clean": "node scripts/rmdir.js ./dist",
-    "pretest": "npm run build",
+    "pretest": "pnpm build",
     "test": "node --test test",
-    "prepublishOnly": "npm run clean && npm run build && npm test",
-    "release": "npm publish"
+    "prepublishOnly": "pnpm clean && pnpm build && pnpm test",
+    "release": "pnpm publish"
   },
   "dependencies": {
     "commander": "^15",
     "console-log-colors": "^0.5.0"
   },
+  "peerDependencies": {
+    "jimp": "^1.6.1"
+  },
+  "peerDependenciesMeta": {
+    "jimp": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^26",
+    "jimp": "^1.6.1",
     "typescript": "^7"
   }
 }

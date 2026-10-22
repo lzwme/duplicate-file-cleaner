@@ -1,23 +1,31 @@
 import fs from "node:fs";
 import path from "node:path";
+import { HashCache } from "./cache";
 import { resolveConfig } from "./config";
+import {
+  detectDuplicateDirs,
+  detectExactDuplicates,
+  detectSimilarImages,
+} from "./detector";
 import { CleanerError, errorMessage } from "./error";
 import { deleteFiles, removeEmptyDirs } from "./executor";
-import { hashFiles } from "./hasher";
-import { selectKeep } from "./policy";
 import { silentReporter } from "./reporter";
 import { scanFiles } from "./scanner";
+import { writeTrashManifest } from "./trash";
 import type {
   CleanOptions,
   CleanResult,
   CleanStats,
   CleanerConfig,
+  DeleteRecord,
+  DuplicateDirGroup,
   DuplicateGroup,
   FileInfo,
   Reporter,
-  ScanError,
+  SimilarGroup,
   UserConfig,
 } from "./types";
+import { isInside } from "./utils";
 
 /** 校验 baseDir 是否存在且安全 */
 const assertBaseDir = (baseDir: string): void => {
@@ -38,128 +46,105 @@ const assertBaseDir = (baseDir: string): void => {
   }
 };
 
-const groupByHash = async (
+interface DetectOutcome {
+  groups: DuplicateGroup[];
+  dirGroups: DuplicateDirGroup[];
+  similarGroups: SimilarGroup[];
+}
+
+const runDetectors = async (
   files: FileInfo[],
+  dirs: string[],
   config: CleanerConfig,
-  errors: ScanError[],
+  errors: CleanResult["scan"]["errors"],
+  reporter: Reporter,
   signal: AbortSignal | undefined,
-  sampleSize: number
-): Promise<Map<string, FileInfo[]>> => {
-  const results = await hashFiles(
-    files,
-    { algorithm: config.algorithm, concurrency: config.concurrency, sampleSize },
-    errors,
-    signal
-  );
+  cache: HashCache | null
+): Promise<DetectOutcome> => {
+  const groups =
+    config.detect === "dir"
+      ? []
+      : await detectExactDuplicates(files, config, errors, reporter, signal, cache);
 
-  const groups = new Map<string, FileInfo[]>();
-  for (const result of results) {
-    if (!result.hash) continue;
-    const list = groups.get(result.hash);
-    if (list) list.push(result.file);
-    else groups.set(result.hash, [result.file]);
-  }
-  return groups;
+  const dirGroups =
+    config.detect === "exact"
+      ? []
+      : await detectDuplicateDirs(files, config, dirs, errors, reporter, signal, cache);
+
+  const similarGroups = config.similarImages
+    ? await detectSimilarImages(files, config, errors, reporter, signal)
+    : [];
+
+  return { groups, dirGroups, similarGroups };
 };
 
-/**
- * 分层去重：
- * 1. 按 size（跨目录比较关闭时再加目录前缀）粗分桶
- * 2. 仅对同尺寸候选做头部采样哈希
- * 3. 仅对采样相同的候选做全量哈希
- */
-export const detectDuplicates = async (
+/** 将各类检测结果展开为待删除文件清单（按路径去重） */
+const collectTargets = (
+  outcome: DetectOutcome,
   files: FileInfo[],
-  config: CleanerConfig,
-  errors: ScanError[],
-  reporter?: Reporter,
-  signal?: AbortSignal
-): Promise<DuplicateGroup[]> => {
-  const buckets = new Map<string, FileInfo[]>();
-  for (const file of files) {
-    const key = `${config.compareAllDir ? "" : path.dirname(file.path)}\u0000${file.size}`;
-    const list = buckets.get(key);
-    if (list) list.push(file);
-    else buckets.set(key, [file]);
+  smallFiles: FileInfo[],
+  config: CleanerConfig
+): Array<{ file: FileInfo; hash?: string }> => {
+  const targets = new Map<string, { file: FileInfo; hash?: string }>();
+
+  for (const group of outcome.groups) {
+    for (const file of group.remove) targets.set(file.path, { file, hash: group.hash });
   }
 
-  const refined: FileInfo[][] = [];
-  for (const bucket of buckets.values()) {
-    if (bucket.length < 2) continue;
-
-    // 采样长度不小于文件本身时，采样哈希等价于全量哈希，直接进入下一阶段
-    if (config.sampleSize > 0 && config.sampleSize < bucket[0].size) {
-      const groups = await groupByHash(bucket, config, errors, signal, config.sampleSize);
-      for (const list of groups.values()) {
-        if (list.length > 1) refined.push(list);
+  for (const dirGroup of outcome.dirGroups) {
+    for (const dir of dirGroup.remove) {
+      for (const file of files) {
+        if (isInside(dir, file.path)) targets.set(file.path, { file, hash: dirGroup.hash });
       }
-    } else {
-      refined.push(bucket);
     }
   }
 
-  const result: DuplicateGroup[] = [];
-
-  for (const bucket of refined) {
-    const groups = await groupByHash(bucket, config, errors, signal, 0);
-
-    for (const [hash, list] of groups) {
-      if (list.length < 2) continue;
-
-      const decision = selectKeep(list, {
-        keep: config.keep,
-        keepStrategy: config.keepStrategy,
-        preferDirs: config.preferDirs,
-      });
-
-      if (!decision.remove.length) continue;
-
-      const group: DuplicateGroup = {
-        hash,
-        size: list[0].size,
-        files: list,
-        keep: decision.keep,
-        remove: decision.remove,
-        savedBytes: decision.remove.reduce((total, file) => total + file.size, 0),
-      };
-
-      result.push(group);
-      reporter?.onGroup?.(group);
+  if (config.deleteSimilarImages) {
+    for (const group of outcome.similarGroups) {
+      for (const file of group.remove) targets.set(file.path, { file, hash: group.hash });
     }
   }
 
-  result.sort((a, b) => b.size - a.size || a.hash.localeCompare(b.hash));
-  return result;
+  for (const file of smallFiles) targets.set(file.path, { file });
+
+  return [...targets.values()];
 };
 
-const buildStats = (
-  scan: CleanResult["scan"],
-  groups: DuplicateGroup[],
-  smallFiles: FileInfo[],
-  deleted: CleanResult["deleted"],
-  removedEmptyDirs: CleanResult["removedEmptyDirs"]
-): CleanStats => {
-  const removableFiles =
-    groups.reduce((total, group) => total + group.remove.length, 0) + smallFiles.length;
-  const removableBytes =
-    groups.reduce((total, group) => total + group.savedBytes, 0) +
-    smallFiles.reduce((total, file) => total + file.size, 0);
-  const succeeded = deleted.filter((record) => record.status === "deleted" || record.status === "trashed");
+const buildStats = (params: {
+  scan: CleanResult["scan"];
+  outcome: DetectOutcome;
+  smallFiles: FileInfo[];
+  targets: Array<{ file: FileInfo }>;
+  deleted: DeleteRecord[];
+  removedEmptyDirs: DeleteRecord[];
+  cache: HashCache | null;
+  hardlinksSkipped: number;
+}): CleanStats => {
+  const { scan, outcome, smallFiles, targets, deleted, removedEmptyDirs, cache, hardlinksSkipped } =
+    params;
+  const succeeded = deleted.filter(
+    (record) => record.status === "deleted" || record.status === "trashed"
+  );
 
   return {
     totalFiles: scan.files + smallFiles.length,
     totalDirs: scan.dirs,
-    totalBytes: scan.bytes + smallFiles.reduce((total, file) => total + file.size, 0),
-    duplicateGroups: groups.length,
-    duplicateFiles: groups.reduce((total, group) => total + group.files.length, 0),
-    removableFiles,
-    removableBytes,
+    totalBytes:
+      scan.bytes + smallFiles.reduce((total, file) => total + file.size, 0),
+    duplicateGroups: outcome.groups.length,
+    duplicateFiles: outcome.groups.reduce((total, group) => total + group.files.length, 0),
+    removableFiles: targets.length,
+    removableBytes: targets.reduce((total, target) => total + target.file.size, 0),
     deletedFiles: succeeded.length,
     deletedBytes: succeeded.reduce((total, record) => total + record.size, 0),
     failedFiles: deleted.filter((record) => record.status === "failed").length,
     emptyDirsRemoved: removedEmptyDirs.filter((record) => record.status !== "failed").length,
     skippedSmallFiles: scan.skippedSmallFiles,
     skippedSymlinks: scan.skippedSymlinks,
+    hardlinksSkipped,
+    duplicateDirs: outcome.dirGroups.length,
+    similarGroups: outcome.similarGroups.length,
+    cacheHits: cache?.hits || 0,
     errors: scan.errors,
   };
 };
@@ -180,7 +165,15 @@ const createReport = (result: CleanResult) => ({
     size: group.size,
     keep: group.keep.map((file) => file.relPath),
     remove: group.remove.map((file) => file.relPath),
+    hardlinks: group.hardlinks.map((file) => file.relPath),
     savedBytes: group.savedBytes,
+  })),
+  dirGroups: result.dirGroups,
+  similarGroups: result.similarGroups.map((group) => ({
+    hash: group.hash,
+    distance: group.distance,
+    keep: group.keep.map((file) => file.relPath),
+    remove: group.remove.map((file) => file.relPath),
   })),
   deleted: result.deleted,
   removedEmptyDirs: result.removedEmptyDirs,
@@ -193,7 +186,7 @@ const writeReport = async (filePath: string, result: CleanResult): Promise<void>
 
 /**
  * 执行一次重复文件清理。
- * 默认 dryRun=true（与 DEFAULT_CONFIG 一致），只有显式关闭才会修改磁盘。
+ * 默认 dryRun=true，只有显式关闭才会修改磁盘。
  */
 export const clean = async (
   input: UserConfig = {},
@@ -214,32 +207,50 @@ export const clean = async (
 
   assertBaseDir(config.baseDir);
 
+  const cache = config.cacheFile
+    ? HashCache.load(config.cacheFile, config.algorithm, (message) =>
+        reporter.onWarning?.(message)
+      )
+    : null;
+
   const scan = await scanFiles(config, reporter, options.signal);
-  const groups = await detectDuplicates(scan.files, config, scan.stats.errors, reporter, options.signal);
+  const outcome = await runDetectors(
+    scan.files,
+    scan.dirs,
+    config,
+    scan.stats.errors,
+    reporter,
+    options.signal,
+    cache
+  );
 
   const smallFiles = config.deleteMinSizeFiles ? scan.smallFiles : [];
+  const targets = collectTargets(outcome, scan.files, smallFiles, config);
   const totalCandidates = scan.stats.files + smallFiles.length;
-  const removableFiles =
-    groups.reduce((total, group) => total + group.remove.length, 0) + smallFiles.length;
+
+  // 同一 inode 的多个硬链接不参与删除，也不计入可释放空间
+  const inodeSeen = new Set<string>();
+  let hardlinksSkipped = 0;
+  for (const file of scan.files) {
+    if (file.ino <= 0) continue;
+    const inodeKey = `${file.dev}:${file.ino}`;
+    if (inodeSeen.has(inodeKey)) hardlinksSkipped++;
+    else inodeSeen.add(inodeKey);
+  }
 
   if (
     !config.dryRun &&
     config.maxDeleteRatio > 0 &&
     totalCandidates > 0 &&
-    removableFiles / totalCandidates > config.maxDeleteRatio
+    targets.length / totalCandidates > config.maxDeleteRatio
   ) {
     throw new CleanerError(
-      `本次将删除 ${removableFiles} / ${totalCandidates} 个文件，超过比例上限 ${(
+      `本次将删除 ${targets.length} / ${totalCandidates} 个文件，超过比例上限 ${(
         config.maxDeleteRatio * 100
       ).toFixed(0)}%。已中止，请检查配置或调高 maxDeleteRatio`,
       "DELETE_RATIO_EXCEEDED"
     );
   }
-
-  const targets = [
-    ...groups.flatMap((group) => group.remove.map((file) => ({ file, hash: group.hash }))),
-    ...smallFiles.map((file) => ({ file, hash: undefined })),
-  ];
 
   const executeOptions = {
     dryRun: config.dryRun,
@@ -256,15 +267,43 @@ export const clean = async (
     ? await removeEmptyDirs(scan.dirs, executeOptions, deletedPaths, reporter)
     : [];
 
+  if (config.trashDir && !config.dryRun) {
+    try {
+      await writeTrashManifest(config.trashDir, config.baseDir, deleted);
+    } catch (err) {
+      reporter.onWarning?.(`写入回收站清单失败：${errorMessage(err)}`);
+    }
+  }
+
+  if (cache) {
+    cache.prune(new Set(scan.files.map((file) => file.path)));
+    try {
+      await cache.save();
+    } catch (err) {
+      reporter.onWarning?.(`保存哈希缓存失败：${errorMessage(err)}`);
+    }
+  }
+
   const result: CleanResult = {
     baseDir: config.baseDir,
     dryRun: config.dryRun,
     config,
     scan: scan.stats,
-    groups,
+    groups: outcome.groups,
+    dirGroups: outcome.dirGroups,
+    similarGroups: outcome.similarGroups,
     deleted,
     removedEmptyDirs,
-    stats: buildStats(scan.stats, groups, smallFiles, deleted, removedEmptyDirs),
+    stats: buildStats({
+      scan: scan.stats,
+      outcome,
+      smallFiles,
+      targets,
+      deleted,
+      removedEmptyDirs,
+      cache,
+      hardlinksSkipped,
+    }),
   };
 
   reporter.summary?.(result);
@@ -282,3 +321,6 @@ export const clean = async (
 
 /** 兼容 v1 的入口名，注意：v2 起返回 Promise */
 export const cleaner = clean;
+
+/** 兼容旧导出：精确去重检测 */
+export { detectExactDuplicates as detectDuplicates } from "./detector";

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
+import type { HashCache } from "./cache";
 import { errorMessage } from "./error";
 import type { FileInfo, ScanError } from "./types";
 
@@ -66,24 +67,57 @@ export interface HashTaskResult {
   error?: string;
 }
 
+export interface HashFilesOptions {
+  algorithm: string;
+  concurrency: number;
+  sampleSize?: number;
+  /** 哈希缓存（可选） */
+  cache?: HashCache | null;
+  /** 每完成一个文件回调一次 */
+  onProgress?: (processed: number, bytes: number, totalBytes: number) => void;
+}
+
 /**
  * 并发计算一组文件的哈希，单个文件失败不会中断整组。
- * 失败项会被写入 errors，便于最终报告。
+ * 优先使用缓存（按 size + mtime 校验），失败项写入 errors。
  */
 export const hashFiles = async (
   files: FileInfo[],
-  options: { algorithm: string; concurrency: number; sampleSize?: number },
+  options: HashFilesOptions,
   errors: ScanError[],
   signal?: AbortSignal
 ): Promise<HashTaskResult[]> => {
+  const totalBytes = files.reduce((total, file) => total + file.size, 0);
+  const sampleSize = options.sampleSize || 0;
+  const cache = options.cache || null;
+  let processed = 0;
+  let hashedBytes = 0;
+
   return mapLimit(files, options.concurrency, async (file) => {
     signal?.throwIfAborted();
+
+    const cached = cache?.get(file);
+
+    if (cached) {
+      processed++;
+      hashedBytes += file.size;
+      options.onProgress?.(processed, hashedBytes, totalBytes);
+      return { file, hash: cached };
+    }
+
     try {
-      const hash = await hashFile(file.path, options.algorithm, options.sampleSize || 0);
+      const hash = await hashFile(file.path, options.algorithm, sampleSize);
+      cache?.set(file, hash);
+      processed++;
+      hashedBytes += file.size;
+      options.onProgress?.(processed, hashedBytes, totalBytes);
       return { file, hash };
     } catch (err) {
       const message = errorMessage(err);
       errors.push({ path: file.path, message });
+      processed++;
+      hashedBytes += file.size;
+      options.onProgress?.(processed, hashedBytes, totalBytes);
       return { file, hash: null, error: message };
     }
   });

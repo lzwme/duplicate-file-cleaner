@@ -87,6 +87,48 @@ test('CLI 目录不存在时返回非零退出码', () => {
   }
 });
 
+test('CLI --detect dir 执行重复目录清理', () => {
+  const dir = makeTmpDir();
+  try {
+    writeTree(dir, { 'keep/a.txt': 'x', 'copy/a.txt': 'x' });
+
+    const result = JSON.parse(
+      runCli(
+        ['-d', dir, '-y', '--detect', 'dir', '--prefer', path.join(dir, 'keep'), '--json', '-q'],
+        dir
+      )
+    );
+
+    assert.strictEqual(result.dirGroups.length, 1);
+    assert.ok(exists(path.join(dir, 'keep', 'a.txt')));
+    assert.ok(!exists(path.join(dir, 'copy')));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('CLI --restore 还原回收站文件', () => {
+  const dir = makeTmpDir();
+  const trash = makeTmpDir();
+  try {
+    writeTree(dir, { 'a.txt': 'same', 'b.txt': 'same' });
+
+    runCli(['-d', dir, '-y', '--trash', trash, '--keep-strategy', 'shortest-path', '--json', '-q'], dir);
+    assert.ok(!exists(path.join(dir, 'b.txt')));
+
+    const preview = JSON.parse(runCli(['--restore', trash, '--json', '-q'], dir));
+    assert.strictEqual(preview.dryRun, true);
+    assert.ok(!exists(path.join(dir, 'b.txt')));
+
+    const restored = JSON.parse(runCli(['--restore', trash, '-y', '--json', '-q'], dir));
+    assert.strictEqual(restored.restored.length, 1);
+    assert.ok(exists(path.join(dir, 'b.txt')));
+  } finally {
+    cleanup(dir);
+    cleanup(trash);
+  }
+});
+
 test('CLI 无参数时展示帮助且不扫描目录', () => {
   const dir = makeTmpDir();
   try {
