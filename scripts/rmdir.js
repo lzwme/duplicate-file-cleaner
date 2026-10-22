@@ -1,37 +1,29 @@
+/**
+ * 递归删除目录（仅用于清理构建产物）。
+ * 出于安全考虑，只允许删除当前工作目录之下的子目录。
+ */
+const fs = require('node:fs');
+const path = require('node:path');
 
-const path = require('path');
-const fs = require('fs');
+const cwd = process.cwd();
+const target = path.resolve(process.argv[2] || '');
 
-const rmdir = (dir) => {
-  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return;
-
-  const fileList = fs.readdirSync(dir);
-
-  for (let filename of fileList) {
-    if (!filename || ['.', '..'].includes(filename)) continue;
-
-    const filePath = path.resolve(dir, filename);
-    const fileStat = fs.statSync(filePath);
-
-    if (fileStat.isDirectory()) {
-      rmdir(filePath);
-      continue;
-    }
-
-    if (fileStat.isFile()) fs.unlinkSync(filePath);
-  }
+if (!process.argv[2]) {
+  console.error('用法: node scripts/rmdir.js <dir>');
+  process.exit(1);
 }
 
-const start = () => {
-  const dest = path.resolve((process.argv[2] || './').trim());
+const relative = path.relative(cwd, target);
 
-  if (!fs.existsSync(dest)) {
-    console.log('指定的目录不存在：', dest);
-    return;
-  }
-
-  rmdir(dest);
-  console.log('目录已删除：', dest);
+if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+  console.error(`拒绝删除工作目录之外的路径：${target}`);
+  process.exit(1);
 }
 
-start();
+if (!fs.existsSync(target)) {
+  console.log('目录不存在，跳过：', target);
+  process.exit(0);
+}
+
+fs.rmSync(target, { recursive: true, force: true });
+console.log('目录已删除：', target);

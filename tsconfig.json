@@ -1,35 +1,22 @@
 {
     "compilerOptions": {
-        "baseUrl": "./lib",
-        "ignoreDeprecations": "6.0",
         "rootDir": "./lib",
-        "skipLibCheck": true,
-        "outDir": "./dist/",
+        "outDir": "./dist",
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "target": "esnext",
+        "lib": ["esnext"],
+        "types": ["node"],
+        "declaration": true,
         "sourceMap": false,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
         "noImplicitThis": true,
         "noImplicitAny": false,
-        "module": "commonjs",
-        "target": "esnext",
-        "moduleResolution": "node",
-        "esModuleInterop": true,
-        "experimentalDecorators": true,
-        "emitDecoratorMetadata": true,
-        "allowSyntheticDefaultImports": true,
-        "allowJs": false,
         "noUnusedLocals": true,
-        "noUnusedParameters": true,
-        "declaration": true,
-        "lib": ["es6", "es2017", "esnext", "dom", "webworker"],
-        "types": ["node"],
-        "typeRoots" : ["./typings", "./node_modules/@types"]
+        "noUnusedParameters": true
     },
-    "exclude": [
-        "dist",
-        "src",
-        "node_modules",
-        "**/node_modules/*"
-    ],
-    "include": [
-        "./lib"
-    ]
+    "include": ["./lib"],
+    "exclude": ["dist", "node_modules", "test"]
 }

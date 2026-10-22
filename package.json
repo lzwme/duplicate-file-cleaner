@@ -1,12 +1,27 @@
 {
   "name": "@lzwme/duplicate-file-cleaner",
-  "version": "1.2.0",
-  "description": "一个基于 Node.js 的重复文件删除工具。",
+  "version": "2.0.0",
+  "description": "一个基于 Node.js 的重复文件清理工具。",
   "main": "index.js",
-  "typings": "./dist/index.d.ts",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./index.js",
+      "default": "./index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
     "dfcleaner": "bin/dfcleaner.js"
   },
+  "files": [
+    "bin",
+    "dist",
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
   "repository": "https://github.com/lzwme/duplicate-file-cleaner.git",
   "publishConfig": {
     "registry": "https://registry.npmjs.com",
@@ -19,7 +34,7 @@
   },
   "license": "MIT",
   "engines": {
-    "node": ">=22"
+    "node": ">=20"
   },
   "keywords": [
     "cleaner",
@@ -33,12 +48,13 @@
     "start": "npm run dev",
     "dev": "tsc -w",
     "build": "tsc",
-    "test": "node test/test.js",
-    "release": "npm run clean && npm run build && echo done!",
-    "clean": "node scripts/rmdir.js ./dist"
+    "clean": "node scripts/rmdir.js ./dist",
+    "pretest": "npm run build",
+    "test": "node --test test",
+    "prepublishOnly": "npm run clean && npm run build && npm test",
+    "release": "npm publish"
   },
   "dependencies": {
-    "@lzwme/duplicate-file-cleaner": "link:",
     "commander": "^15",
     "console-log-colors": "^0.5.0"
   },
