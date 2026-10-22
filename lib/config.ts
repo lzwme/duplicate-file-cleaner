@@ -23,7 +23,7 @@ const config = {
   /** 文件排除规则。字符串、正则表达式或正则表达式数组。如设置，命中则不处理 */
   exclude: [/(\/|\\)(.git|node_modules)(\/|\\)?/],
   /** 文件匹配规则。字符串、正则表达式或正则表达式数组。如设置，命中的文件才处理 */
-  include: null,
+  include: null as RegExp[] | null,
   /** 配置文件路径 */
   configPath: CONF_FILE_NAME,
 };
@@ -53,7 +53,7 @@ export const getConfig = (useCache = true, cfg?: IConfig) => {
   return config;
 };
 
-function formatRegRule(rule: string | RegExp | RegExp[]) {
+function formatRegRule(rule: string | RegExp | RegExp[] | null) {
   if (!rule) rule = [];
   if (typeof rule === "string") {
     rule = rule.split(",").map((str) => new RegExp(str));

@@ -64,7 +64,7 @@ function clearDir(dir) {
 
   const fileList = fs.readdirSync(dir);
   const md5Cache = {};
-  const subDirList = [];
+  const subDirList: string[] = [];
   let delFileCount = 0;
 
   log.log("\n");

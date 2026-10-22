@@ -1,6 +1,8 @@
 {
     "compilerOptions": {
         "baseUrl": "./lib",
+        "ignoreDeprecations": "6.0",
+        "rootDir": "./lib",
         "skipLibCheck": true,
         "outDir": "./dist/",
         "sourceMap": false,
@@ -18,6 +20,7 @@
         "noUnusedParameters": true,
         "declaration": true,
         "lib": ["es6", "es2017", "esnext", "dom", "webworker"],
+        "types": ["node"],
         "typeRoots" : ["./typings", "./node_modules/@types"]
     },
     "exclude": [
