@@ -24,11 +24,25 @@ const createStats = (): ScanStats => ({
   errors: [],
 });
 
+/** 为多根目录生成不冲突的可读标签（用作 relPath 前缀） */
+export const buildRootLabels = (roots: string[]): string[] => {
+  const used = new Map<string, number>();
+
+  return roots.map((root, index) => {
+    const raw = path.basename(root) || `root${index + 1}`;
+    const base = raw.replace(/[\\/:*?"<>|]/g, "_");
+    const key = base.toLowerCase();
+    const count = used.get(key) || 0;
+    used.set(key, count + 1);
+    return count === 0 ? base : `${base}-${count + 1}`;
+  });
+};
+
 /**
- * 扫描目录，产出稳定排序的文件列表。
+ * 扫描一个或多个根目录，产出稳定排序的文件列表。
  * - lstat 判定类型，软链接默认跳过，开启 followSymlinks 时做 realpath 越界与环路校验
  * - 单个条目出错只记录错误，不中断整体扫描
- * - 文件按相对路径排序，保证保留策略的确定性
+ * - 多根目录时 relPath 会带上根目录标签前缀，保证跨根唯一且可读
  */
 export const scanFiles = async (
   config: CleanerConfig,
@@ -39,24 +53,10 @@ export const scanFiles = async (
   const files: FileInfo[] = [];
   const smallFiles: FileInfo[] = [];
   const dirs: string[] = [];
-  const matcher = createMatcher(config.include, config.exclude);
-  const ignorer = new Ignorer();
 
-  for (const ignoreFile of config.ignoreFiles) {
-    const target = path.isAbsolute(ignoreFile) ? ignoreFile : path.join(config.baseDir, ignoreFile);
-    if (fs.existsSync(target)) ignorer.addFile(target);
-  }
-
-  reporter?.onScanStart?.(config.baseDir);
-
-  let baseRealPath = config.baseDir;
-  try {
-    baseRealPath = await fs.promises.realpath(config.baseDir);
-  } catch {
-    // realpath 失败时退回原始路径，后续遍历仍会给出明确错误
-  }
-
-  const visitedRealPaths = new Set([baseRealPath]);
+  const roots = config.baseDirs?.length ? config.baseDirs : [config.baseDir];
+  const labels = buildRootLabels(roots);
+  const multiRoot = roots.length > 1;
 
   const progressStarted = Date.now();
   let lastProgressAt = 0;
@@ -75,104 +75,132 @@ export const scanFiles = async (
     });
   };
 
-  const walk = async (dir: string, relDir: string, depth: number): Promise<void> => {
-    signal?.throwIfAborted();
+  for (let rootIndex = 0; rootIndex < roots.length; rootIndex++) {
+    const root = roots[rootIndex];
+    const label = multiRoot ? labels[rootIndex] : "";
+    const matcher = createMatcher(config.include, config.exclude);
+    const ignorer = new Ignorer();
 
-    let entries: fs.Dirent[];
+    for (const ignoreFile of config.ignoreFiles) {
+      const target = path.isAbsolute(ignoreFile) ? ignoreFile : path.join(root, ignoreFile);
+      if (fs.existsSync(target)) ignorer.addFile(target);
+    }
+
+    reporter?.onScanStart?.(root);
+
+    let rootRealPath = root;
     try {
-      entries = await fs.promises.readdir(dir, { withFileTypes: true });
-    } catch (err) {
-      stats.errors.push({ path: dir, message: errorMessage(err) });
-      return;
+      rootRealPath = await fs.promises.realpath(root);
+    } catch {
+      // realpath 失败时退回原始路径，后续遍历仍会给出明确错误
     }
 
-    entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    const visitedRealPaths = new Set([rootRealPath]);
+    const prefix = (relPath: string) => (label ? `${label}/${relPath}` : relPath);
 
-    for (const entry of entries) {
+    const walk = async (dir: string, relDir: string, depth: number): Promise<void> => {
       signal?.throwIfAborted();
-      reportProgress();
 
-      const relPath = relDir ? `${relDir}/${entry.name}` : entry.name;
-      const fullPath = path.join(dir, entry.name);
-
-      if (matcher.excludes(relPath) || ignorer.ignores(relPath)) continue;
-
-      let isDirectory = entry.isDirectory();
-      let isFile = entry.isFile();
-      let isSymlink = entry.isSymbolicLink();
-
-      if (isSymlink) {
-        if (!config.followSymlinks) {
-          stats.skippedSymlinks++;
-          continue;
-        }
-        try {
-          const realPath = await fs.promises.realpath(fullPath);
-          const inside =
-            realPath === baseRealPath || realPath.startsWith(baseRealPath + path.sep);
-          if (!inside) {
-            stats.errors.push({ path: fullPath, message: "软链接指向清理目录之外，已跳过" });
-            continue;
-          }
-          if (visitedRealPaths.has(realPath)) {
-            stats.errors.push({ path: fullPath, message: "检测到软链接环路，已跳过" });
-            continue;
-          }
-          const stat = await fs.promises.stat(fullPath);
-          isDirectory = stat.isDirectory();
-          isFile = stat.isFile();
-          if (isDirectory) visitedRealPaths.add(realPath);
-        } catch (err) {
-          stats.errors.push({ path: fullPath, message: errorMessage(err) });
-          continue;
-        }
-      }
-
-      if (isDirectory) {
-        if (!config.isClearSubDir) continue;
-        if (config.maxDepth >= 0 && depth + 1 > config.maxDepth) continue;
-
-        stats.dirs++;
-        dirs.push(fullPath);
-        await walk(fullPath, relPath, depth + 1);
-        continue;
-      }
-
-      if (!isFile) continue;
-      if (!matcher.matches(relPath)) continue;
-
+      let entries: fs.Dirent[];
       try {
-        const stat = isSymlink ? await fs.promises.stat(fullPath) : await fs.promises.lstat(fullPath);
+        entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      } catch (err) {
+        stats.errors.push({ path: dir, message: errorMessage(err) });
+        return;
+      }
 
-        const info: FileInfo = {
-          path: path.resolve(fullPath),
-          relPath: toPosix(relPath),
-          name: entry.name,
-          size: stat.size,
-          mtimeMs: stat.mtimeMs,
-          ino: Number(stat.ino),
-          dev: Number(stat.dev),
-          isSymlink,
-        };
+      entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
-        if (stat.size < config.minFileSize) {
-          stats.skippedSmallFiles++;
-          smallFiles.push(info);
+      for (const entry of entries) {
+        signal?.throwIfAborted();
+        reportProgress();
+
+        const localRelPath = relDir ? `${relDir}/${entry.name}` : entry.name;
+        const relPath = prefix(localRelPath);
+        const fullPath = path.join(dir, entry.name);
+
+        if (matcher.excludes(relPath) || ignorer.ignores(relPath)) continue;
+
+        let isDirectory = entry.isDirectory();
+        let isFile = entry.isFile();
+        let isSymlink = entry.isSymbolicLink();
+
+        if (isSymlink) {
+          if (!config.followSymlinks) {
+            stats.skippedSymlinks++;
+            continue;
+          }
+          try {
+            const realPath = await fs.promises.realpath(fullPath);
+            const inside =
+              realPath === rootRealPath || realPath.startsWith(rootRealPath + path.sep);
+            if (!inside) {
+              stats.errors.push({ path: fullPath, message: "软链接指向清理目录之外，已跳过" });
+              continue;
+            }
+            if (visitedRealPaths.has(realPath)) {
+              stats.errors.push({ path: fullPath, message: "检测到软链接环路，已跳过" });
+              continue;
+            }
+            const stat = await fs.promises.stat(fullPath);
+            isDirectory = stat.isDirectory();
+            isFile = stat.isFile();
+            if (isDirectory) visitedRealPaths.add(realPath);
+          } catch (err) {
+            stats.errors.push({ path: fullPath, message: errorMessage(err) });
+            continue;
+          }
+        }
+
+        if (isDirectory) {
+          if (!config.isClearSubDir) continue;
+          if (config.maxDepth >= 0 && depth + 1 > config.maxDepth) continue;
+
+          stats.dirs++;
+          dirs.push(fullPath);
+          await walk(fullPath, localRelPath, depth + 1);
           continue;
         }
 
-        files.push(info);
-        stats.files++;
-        stats.bytes += stat.size;
-        reporter?.onScanFile?.(info);
-      } catch (err) {
-        stats.skippedUnreadable++;
-        stats.errors.push({ path: fullPath, message: errorMessage(err) });
-      }
-    }
-  };
+        if (!isFile) continue;
+        if (!matcher.matches(relPath)) continue;
 
-  await walk(config.baseDir, "", 0);
+        try {
+          const stat = isSymlink
+            ? await fs.promises.stat(fullPath)
+            : await fs.promises.lstat(fullPath);
+
+          const info: FileInfo = {
+            path: path.resolve(fullPath),
+            relPath: toPosix(relPath),
+            root,
+            name: entry.name,
+            size: stat.size,
+            mtimeMs: stat.mtimeMs,
+            ino: Number(stat.ino),
+            dev: Number(stat.dev),
+            isSymlink,
+          };
+
+          if (stat.size < config.minFileSize) {
+            stats.skippedSmallFiles++;
+            smallFiles.push(info);
+            continue;
+          }
+
+          files.push(info);
+          stats.files++;
+          stats.bytes += stat.size;
+          reporter?.onScanFile?.(info);
+        } catch (err) {
+          stats.skippedUnreadable++;
+          stats.errors.push({ path: fullPath, message: errorMessage(err) });
+        }
+      }
+    };
+
+    await walk(root, "", 0);
+  }
 
   if (reporter?.onProgress) {
     const elapsedMs = Date.now() - progressStarted;

@@ -2,12 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { errorMessage } from "./error";
 import type { DeleteRecord, FileInfo, Reporter } from "./types";
-import { toPosix } from "./utils";
+import { isInside, toPosix } from "./utils";
 
 export interface ExecuteOptions {
   dryRun: boolean;
   trashDir: string | null;
-  baseDir: string;
+  /** 全部根目录，用于避免删除根目录自身与计算相对路径 */
+  baseDirs: string[];
 }
 
 const toRecord = (file: FileInfo, hash?: string): DeleteRecord => ({
@@ -120,14 +121,16 @@ export const removeEmptyDirs = async (
   reporter?: Reporter
 ): Promise<DeleteRecord[]> => {
   const records: DeleteRecord[] = [];
-  const resolvedBase = path.resolve(options.baseDir);
+  const roots = (options.baseDirs || []).map((root) => path.resolve(root));
   const pending = new Set(deletedPaths);
 
   for (const dir of [...new Set(dirs)].sort(byDepthDesc)) {
     const absolute = path.resolve(dir);
-    if (absolute === resolvedBase) continue;
+    // 永远不删除根目录自身
+    if (roots.includes(absolute)) continue;
 
-    const relPath = toPosix(path.relative(resolvedBase, absolute));
+    const ownerRoot = roots.find((root) => isInside(root, absolute)) || roots[0] || absolute;
+    const relPath = toPosix(path.relative(ownerRoot, absolute));
 
     if (options.dryRun) {
       let entries: string[];

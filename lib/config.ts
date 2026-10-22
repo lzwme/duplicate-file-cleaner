@@ -44,6 +44,7 @@ export const DEFAULT_EXCLUDE = [
 /** 所有允许的配置键，用于未知字段告警 */
 const KNOWN_KEYS = new Set([
   "baseDir",
+  "baseDirs",
   "configPath",
   "dryRun",
   "followSymlinks",
@@ -82,6 +83,8 @@ const KNOWN_KEYS = new Set([
 export const DEFAULT_CONFIG: CleanerConfig = {
   /** 空字符串表示使用运行时 cwd，避免模块加载时固化目录 */
   baseDir: "",
+  /** 多根目录；为空时回退 baseDir */
+  baseDirs: [],
   configPath: null,
   dryRun: true,
   followSymlinks: false,
@@ -250,8 +253,24 @@ export const resolveConfig = (
     );
   }
 
+  // 根目录：baseDirs 优先，单目录时回退 baseDir，并做去重
+  const rootInputs = toStringArray(merged.baseDirs);
+  if (!rootInputs.length) rootInputs.push(String(merged.baseDir || cwd));
+
+  const baseDirs: string[] = [];
+  const seenRoots = new Set<string>();
+  for (const rootInput of rootInputs) {
+    const absolute = path.resolve(cwd, rootInput);
+    const key = process.platform === "win32" ? absolute.toLowerCase() : absolute;
+    if (seenRoots.has(key)) continue;
+    seenRoots.add(key);
+    baseDirs.push(absolute);
+  }
+  if (!baseDirs.length) baseDirs.push(cwd);
+
   const config: CleanerConfig = {
-    baseDir: path.resolve(cwd, String(merged.baseDir || cwd)),
+    baseDir: baseDirs[0],
+    baseDirs,
     configPath,
     dryRun: toBool(merged.dryRun, DEFAULT_CONFIG.dryRun),
     followSymlinks: toBool(merged.followSymlinks, false),

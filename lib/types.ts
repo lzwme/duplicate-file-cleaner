@@ -51,8 +51,10 @@ export interface ProgressInfo {
 export interface FileInfo {
   /** 绝对路径 */
   path: string;
-  /** 相对 baseDir 的 posix 路径 */
+  /** 相对所属根目录的 posix 路径；多根目录时带根目录标签前缀 */
   relPath: string;
+  /** 所属根目录（绝对路径） */
+  root?: string;
   /** 文件名 */
   name: string;
   /** 字节数 */
@@ -86,8 +88,10 @@ export interface ScanStats {
 
 /** 归一化之后的完整配置 */
 export interface CleanerConfig {
-  /** 要清理的根目录（绝对路径） */
+  /** 首个根目录（为兼容单目录用法保留，等价于 baseDirs[0]） */
   baseDir: string;
+  /** 全部根目录（绝对路径，至少一项） */
+  baseDirs: string[];
   /** 实际加载的配置文件路径，未加载为 null */
   configPath: string | null;
   /** 是否为预览模式（不做任何修改） */
@@ -247,6 +251,8 @@ export interface CleanStats {
 /** 一次清理的完整结果 */
 export interface CleanResult {
   baseDir: string;
+  /** 本次处理的全部根目录 */
+  roots: string[];
   dryRun: boolean;
   config: CleanerConfig;
   scan: ScanStats;

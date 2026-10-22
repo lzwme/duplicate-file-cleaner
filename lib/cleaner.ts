@@ -25,24 +25,26 @@ import type {
   SimilarGroup,
   UserConfig,
 } from "./types";
-import { isInside } from "./utils";
+import { commonAncestor, isInside } from "./utils";
 
-/** 校验 baseDir 是否存在且安全 */
-const assertBaseDir = (baseDir: string): void => {
-  let stat: fs.Stats;
-  try {
-    stat = fs.statSync(baseDir);
-  } catch {
-    throw new CleanerError(`指定的目录不存在：${baseDir}`, "BASE_DIR_NOT_FOUND");
-  }
+/** 校验所有根目录是否存在且安全 */
+const assertBaseDirs = (baseDirs: string[]): void => {
+  for (const baseDir of baseDirs) {
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(baseDir);
+    } catch {
+      throw new CleanerError(`指定的目录不存在：${baseDir}`, "BASE_DIR_NOT_FOUND");
+    }
 
-  if (!stat.isDirectory()) {
-    throw new CleanerError(`指定的路径不是目录：${baseDir}`, "BASE_DIR_NOT_DIRECTORY");
-  }
+    if (!stat.isDirectory()) {
+      throw new CleanerError(`指定的路径不是目录：${baseDir}`, "BASE_DIR_NOT_DIRECTORY");
+    }
 
-  const root = path.parse(baseDir).root;
-  if (path.resolve(baseDir) === path.resolve(root)) {
-    throw new CleanerError(`拒绝以文件系统根目录（${root}）作为清理目录`, "UNSAFE_BASE_DIR");
+    const root = path.parse(baseDir).root;
+    if (path.resolve(baseDir) === path.resolve(root)) {
+      throw new CleanerError(`拒绝以文件系统根目录（${root}）作为清理目录`, "UNSAFE_BASE_DIR");
+    }
   }
 };
 
@@ -152,6 +154,7 @@ const buildStats = (params: {
 /** 生成可序列化的报告内容 */
 const createReport = (result: CleanResult) => ({
   baseDir: result.baseDir,
+  roots: result.roots,
   dryRun: result.dryRun,
   generatedAt: new Date().toISOString(),
   config: {
@@ -205,7 +208,7 @@ export const clean = async (
 
   for (const warning of warnings) reporter.onWarning?.(warning);
 
-  assertBaseDir(config.baseDir);
+  assertBaseDirs(config.baseDirs);
 
   const cache = config.cacheFile
     ? HashCache.load(config.cacheFile, config.algorithm, (message) =>
@@ -255,7 +258,7 @@ export const clean = async (
   const executeOptions = {
     dryRun: config.dryRun,
     trashDir: config.trashDir,
-    baseDir: config.baseDir,
+    baseDirs: config.baseDirs,
   };
 
   const deleted = await deleteFiles(targets, executeOptions, reporter);
@@ -269,7 +272,7 @@ export const clean = async (
 
   if (config.trashDir && !config.dryRun) {
     try {
-      await writeTrashManifest(config.trashDir, config.baseDir, deleted);
+      await writeTrashManifest(config.trashDir, commonAncestor(config.baseDirs), deleted);
     } catch (err) {
       reporter.onWarning?.(`写入回收站清单失败：${errorMessage(err)}`);
     }
@@ -286,6 +289,7 @@ export const clean = async (
 
   const result: CleanResult = {
     baseDir: config.baseDir,
+    roots: config.baseDirs,
     dryRun: config.dryRun,
     config,
     scan: scan.stats,

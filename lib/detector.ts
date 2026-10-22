@@ -274,11 +274,26 @@ export const detectDuplicateDirs = async (
     if (result.hash) hashes.set(result.file.path, result.hash);
   }
 
-  const aggregates = createDirAggregates(files, hashes, config.baseDir, dirs);
+  const roots = config.baseDirs?.length ? config.baseDirs : [config.baseDir];
+  const aggregates = new Map<string, DirAggregate>();
+  const rootOfDir = new Map<string, string>();
 
+  for (const root of roots) {
+    const rootFiles = files.filter((file) => isInside(root, file.path));
+    const rootDirs = dirs.filter((dir) => isInside(root, dir));
+    if (!rootFiles.length || !rootDirs.length) continue;
+
+    const rootAggregates = createDirAggregates(rootFiles, hashes, root, rootDirs);
+    for (const [dir, aggregate] of rootAggregates) {
+      aggregates.set(dir, aggregate);
+      rootOfDir.set(dir, root);
+    }
+  }
+
+  const rootSet = new Set(roots);
   const buckets = new Map<string, string[]>();
   for (const [dir, aggregate] of aggregates) {
-    if (dir === config.baseDir || aggregate.fileCount === 0) continue;
+    if (rootSet.has(dir) || aggregate.fileCount === 0) continue;
     const key = `${aggregate.fileCount}\u0000${aggregate.signature}`;
     const list = buckets.get(key);
     if (list) list.push(dir);
@@ -298,9 +313,10 @@ export const detectDuplicateDirs = async (
 
     const pseudoFiles: FileInfo[] = filtered.map((dir) => {
       const aggregate = aggregates.get(dir) as DirAggregate;
+      const ownerRoot = rootOfDir.get(dir) || config.baseDir;
       return {
         path: dir,
-        relPath: toPosix(path.relative(config.baseDir, dir)),
+        relPath: toPosix(path.relative(ownerRoot, dir)),
         name: path.basename(dir),
         size: aggregate.size,
         mtimeMs: aggregate.mtimeMs,

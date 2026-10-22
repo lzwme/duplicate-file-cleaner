@@ -11,7 +11,9 @@ module.exports = {
   minFileSize: 0,
   /** 是否额外删除小于 minFileSize 的文件（危险，默认关闭） */
   deleteMinSizeFiles: false,
-  /** 要清理的文件根目录 */
+  /** 多根目录（优先于 baseDir，自动去重） */
+  baseDirs: [],
+  /** 要清理的文件根目录（baseDirs 为空时生效） */
   baseDir: process.cwd(),
   /** 是否对进行所有目录比较。为 false 则只对同目录下文件进行比较和清理 */
   compareAllDir: true,

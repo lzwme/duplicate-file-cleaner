@@ -14,6 +14,29 @@ export const isInside = (parent: string, child: string): boolean => {
   return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
 };
 
+/** 多个路径的公共祖先目录 */
+export const commonAncestor = (paths: string[]): string => {
+  if (!paths.length) return process.cwd();
+
+  const split = (value: string) => path.resolve(value).split(path.sep);
+  let common = split(paths[0]);
+
+  for (const item of paths.slice(1)) {
+    const parts = split(item);
+    let index = 0;
+    while (
+      index < common.length &&
+      index < parts.length &&
+      common[index].toLowerCase() === parts[index].toLowerCase()
+    ) {
+      index++;
+    }
+    common = common.slice(0, index);
+  }
+
+  return common.join(path.sep) || path.parse(paths[0]).root;
+};
+
 /** 人类可读的字节数 */
 export const formatBytes = (bytes: number): string => {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";

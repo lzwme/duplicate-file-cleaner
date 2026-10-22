@@ -1,6 +1,6 @@
 {
   "name": "@lzwme/duplicate-file-cleaner",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "一个基于 Node.js 的重复文件/重复目录/相似图片清理工具。",
   "main": "index.js",
   "types": "./dist/index.d.ts",

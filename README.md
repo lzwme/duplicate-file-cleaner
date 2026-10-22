@@ -13,6 +13,7 @@
 ## 特性
 
 - 默认 **预览模式**：不加 `--yes` 不会修改任何文件
+- **多根目录**：`-d A -d B`，支持跨根目录去重与重复目录检测
 - 分层哈希（size → 头部采样 → 全量）：避免大文件全量读入内存
 - 三种检测模式：精确去重（`exact`）、重复目录（`dir`）、两者（`both`）
 - **相似图片检测**（dHash + 汉明距离，可选依赖 `jimp`，默认只报告）
@@ -51,6 +52,9 @@ dfcleaner -d ./photos --yes --keep-strategy newest --prefer ./photos/keep
 # 只在相同目录内比较重复文件
 dfcleaner -d ./photos --yes --no-compare-all-dir
 
+# 多根目录：跨磁盘/跨目录去重，优先保留备份盘
+dfcleaner -d ./photos -d /mnt/backup/photos --yes --prefer /mnt/backup/photos
+
 # 重复目录整目录去重（保留 keep 目录）
 dfcleaner -d ./backup --detect dir --yes --prefer ./backup/keep
 
@@ -75,7 +79,7 @@ dfcleaner -d ./photos --yes --json
 
 | 选项 | 说明 |
 | --- | --- |
-| `-d, --dir <path>` | 要清理的目录，默认当前目录 |
+| `-d, --dir <path>` | 要清理的目录，可重复指定实现多根目录；默认当前目录 |
 | `-c, --config <file>` | 配置文件路径；不指定时在当前目录自动查找 |
 | `-y, --yes` | 确认执行删除；未指定时为预览模式 |
 | `--dry-run` | 强制预览（与 `--yes` 同时使用时以预览为准） |
@@ -125,6 +129,9 @@ console.log(`发现 ${result.stats.duplicateGroups} 组重复，可释放 ${resu
 
 // 真实删除：dryRun: false
 // const confirmed = await clean({ baseDir: dir, dryRun: false, keepStrategy: 'newest' });
+
+// 多根目录：跨目录/跨磁盘比较，优先保留备份目录
+await clean({ baseDirs: ['./photos', '/mnt/backup/photos'], preferDirs: ['/mnt/backup/photos'] });
 ```
 
 检测重复目录、相似图片与启用缓存：
@@ -176,6 +183,10 @@ const result = await clean(
 module.exports = {
   /** 是否预览模式，默认 true */
   dryRun: true,
+  /** 多根目录；设置后优先于 baseDir，并自动去重 */
+  baseDirs: [],
+  /** 单根目录（baseDirs 为空时生效） */
+  baseDir: process.cwd(),
   /** 最小文件大小（字节）。小于该值不参与去重 */
   minFileSize: 0,
   /** 是否额外删除小于 minFileSize 的文件（默认 false） */

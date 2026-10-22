@@ -33,7 +33,7 @@ program
   .name("dfcleaner")
   .version(pkg.version, "-v, --version", "输出版本号")
   .description(`${pkg.description} [version ${pkg.version}]`)
-  .option("-d, --dir <path>", "要清理的目录，默认当前目录")
+  .option("-d, --dir <path>", "要清理的目录，可重复指定以支持多根目录", collectMany, [])
   .option("-c, --config <file>", `配置文件路径，默认在当前目录查找 ${CONF_FILE_NAME} 等`)
   .option("-y, --yes", "确认执行删除。未指定时仅预览，不修改任何文件")
   .option("--dry-run", "强制预览模式（与 --yes 同时使用时以预览为准）")
@@ -94,7 +94,7 @@ const buildUserConfig = (): UserConfig => {
         : null;
 
   return {
-    baseDir: options.dir,
+    baseDirs: options.dir.length ? options.dir : undefined,
     configPath: options.config === undefined ? undefined : options.config,
     dryRun: Boolean(options.dryRun) || !options.yes,
     detect: options.detect,
@@ -230,16 +230,29 @@ const runWatch = async (): Promise<void> => {
 
   await execute();
 
+  const roots = config.baseDirs?.length ? config.baseDirs : [config.baseDir];
+
   if (!options.silent) {
-    console.log(color.gray(`[WATCH] 监听中：${config.baseDir}（Ctrl+C 退出）`));
+    console.log(color.gray(`[WATCH] 监听中：${roots.join(", ")}（Ctrl+C 退出）`));
   }
 
-  const watcher = fs.watch(config.baseDir, { recursive: true }, schedule);
+  const watchers: fs.FSWatcher[] = [];
+  for (const root of roots) {
+    try {
+      watchers.push(fs.watch(root, { recursive: true }, schedule));
+    } catch (err) {
+      console.error(
+        color.bgYellow("[WARN]"),
+        `无法监听目录：${root}`,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
 
   await new Promise<void>((resolve) => {
     process.once("SIGINT", () => {
       if (timer) clearTimeout(timer);
-      watcher.close();
+      for (const watcher of watchers) watcher.close();
       resolve();
     });
   });
@@ -255,7 +268,7 @@ const main = async (): Promise<void> => {
   const dirSource = program.getOptionValueSource("dir");
   const hasLocalConfig = CONF_FILE_CANDIDATES.some((name) => fs.existsSync(path.resolve(name)));
 
-  if (!options.dir && !options.config && dirSource !== "cli" && !hasLocalConfig) {
+  if (!options.dir.length && !options.config && dirSource !== "cli" && !hasLocalConfig) {
     program.help();
     return;
   }
