@@ -9,7 +9,7 @@ import { CONF_FILE_CANDIDATES, CONF_FILE_NAME, resolveConfig } from "./config";
 import { isCleanerError } from "./error";
 import { ConsoleReporter } from "./reporter";
 import { restoreFromTrash, type RestoreResult } from "./trash";
-import { DETECT_MODES, KEEP_STRATEGIES, type UserConfig } from "./types";
+import { DETECT_MODES, KEEP_STRATEGIES, ORGANIZE_BY, type UserConfig } from "./types";
 import { formatBytes, parseSize } from "./utils";
 
 const pkg = require("../package.json");
@@ -68,6 +68,12 @@ program
   .option("--delete-similar", "删除相似图片（默认仅报告，需与 --yes 一起使用）")
   .option("--max-delete-ratio <ratio>", "允许删除的文件比例上限（0-1），0 表示不限制", "0")
   .option("--trash <dir>", "回收站目录。设置后删除改为移动到该目录，可人工恢复")
+  .option("--organize <dir>", "归类整理目录。设置后将剩余文件按维度移动到该目录")
+  .addOption(
+    new Option("--organize-by <by>", "归类维度：ext 扩展名 / type 文件类型 / year 年 / month 月")
+      .choices(ORGANIZE_BY as unknown as string[])
+      .default("ext")
+  )
   .option("--restore <dir>", "从回收站还原文件（默认预览，加 --yes 执行）")
   .option("--watch", "监听目录变化并自动重复清理（默认预览）")
   .option("--report <file>", "将 JSON 报告写入指定文件")
@@ -118,6 +124,8 @@ const buildUserConfig = (): UserConfig => {
     deleteSimilarImages: Boolean(options.deleteSimilar),
     maxDeleteRatio: Number(options.maxDeleteRatio),
     trashDir: options.trash,
+    organizeDir: options.organize,
+    organizeBy: options.organizeBy,
     reportFile: options.report,
     progress: options.progress,
     silent: Boolean(options.silent),

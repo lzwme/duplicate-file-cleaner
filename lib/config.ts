@@ -5,9 +5,11 @@ import { normalizeRules } from "./matcher";
 import {
   DETECT_MODES,
   KEEP_STRATEGIES,
+  ORGANIZE_BY,
   type CleanerConfig,
   type DetectMode,
   type KeepStrategy,
+  type OrganizeBy,
   type ResolveConfigOptions,
   type RuleInput,
   type UserConfig,
@@ -71,6 +73,8 @@ const KNOWN_KEYS = new Set([
   "similarThreshold",
   "deleteSimilarImages",
   "progress",
+  "organizeDir",
+  "organizeBy",
   "silent",
   "debug",
   "reportFile",
@@ -111,6 +115,8 @@ export const DEFAULT_CONFIG: CleanerConfig = {
   similarThreshold: 5,
   deleteSimilarImages: false,
   progress: true,
+  organizeDir: null,
+  organizeBy: "ext",
   silent: false,
   debug: false,
   reportFile: null,
@@ -253,6 +259,14 @@ export const resolveConfig = (
     );
   }
 
+  const organizeBy = String(merged.organizeBy || "ext") as OrganizeBy;
+  if (!ORGANIZE_BY.includes(organizeBy)) {
+    throw new CleanerError(
+      `非法的归类维度：${organizeBy}，可选值：${ORGANIZE_BY.join(", ")}`,
+      "INVALID_CONFIG"
+    );
+  }
+
   // 根目录：baseDirs 优先，单目录时回退 baseDir，并做去重
   const rootInputs = toStringArray(merged.baseDirs);
   if (!rootInputs.length) rootInputs.push(String(merged.baseDir || cwd));
@@ -303,6 +317,8 @@ export const resolveConfig = (
     similarThreshold: Math.min(64, Math.max(0, Math.round(toNumber(merged.similarThreshold, 5)))),
     deleteSimilarImages: toBool(merged.deleteSimilarImages, false),
     progress: toBool(merged.progress, true),
+    organizeDir: merged.organizeDir ? path.resolve(cwd, String(merged.organizeDir)) : null,
+    organizeBy,
     silent: toBool(merged.silent, false),
     debug: toBool(merged.debug, false),
     reportFile: merged.reportFile ? path.resolve(cwd, String(merged.reportFile)) : null,
@@ -326,6 +342,20 @@ export const resolveConfig = (
 
   if (config.trashDir && toPosix(config.trashDir).startsWith(toPosix(config.baseDir) + "/")) {
     warn("trashDir 位于清理目录内，请确保已在 exclude 中排除，否则会被重复扫描");
+  }
+
+  if (config.organizeDir) {
+    const organizePosix = toPosix(config.organizeDir);
+    const sameAsRoot = config.baseDirs.some((root) => toPosix(root) === organizePosix);
+
+    if (sameAsRoot) {
+      throw new CleanerError("organizeDir 不能与任何根目录相同", "INVALID_CONFIG");
+    }
+
+    if (config.baseDirs.some((root) => organizePosix.startsWith(toPosix(root) + "/"))) {
+      // 归类目录位于扫描范围内时，扫描阶段会自动跳过它
+      if (config.debug) warn("organizeDir 位于根目录内，扫描时会自动跳过该目录");
+    }
   }
 
   return config;

@@ -57,6 +57,11 @@ export const scanFiles = async (
   const roots = config.baseDirs?.length ? config.baseDirs : [config.baseDir];
   const labels = buildRootLabels(roots);
   const multiRoot = roots.length > 1;
+  const organizeDir = config.organizeDir ? path.resolve(config.organizeDir) : null;
+  const samePath = (left: string, right: string) =>
+    process.platform === "win32"
+      ? left.toLowerCase() === right.toLowerCase()
+      : left === right;
 
   const progressStarted = Date.now();
   let lastProgressAt = 0;
@@ -118,6 +123,9 @@ export const scanFiles = async (
         const localRelPath = relDir ? `${relDir}/${entry.name}` : entry.name;
         const relPath = prefix(localRelPath);
         const fullPath = path.join(dir, entry.name);
+
+        // 归类目标目录不参与扫描，避免把已整理的文件再次移动
+        if (organizeDir && samePath(path.resolve(fullPath), organizeDir)) continue;
 
         if (matcher.excludes(relPath) || ignorer.ignores(relPath)) continue;
 

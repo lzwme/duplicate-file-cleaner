@@ -21,6 +21,7 @@
 - 可配置保留策略：`first` / `last` / `newest` / `oldest` / `shortest-path` / `longest-path`
 - `--prefer <dir>` 优先保留指定目录，`--keep <n>` 每组保留多份
 - 回收站 `--trash <dir>` + `--restore <dir>` 一键还原
+- 归类整理 `--organize <dir>`：清理后把剩余文件按扩展名/类型/年/月移动分类，清单同样可一键还原
 - `--watch` 监听目录变化自动重复清理
 - 进度与 ETA 显示、`--report <file>` JSON 报告、`--json` 结构化输出
 - glob 规则（`--include` / `--exclude` / `.dfcleanerignore`），兼容字符串与正则
@@ -45,6 +46,9 @@ dfcleaner -d ./photos --yes
 
 # 删除前先移动到回收站，便于恢复
 dfcleaner -d ./photos --yes --trash ./dfcleaner-trash
+
+# 清理后把剩余文件按扩展名归类到 ./sorted
+dfcleaner -d ./photos --yes --organize ./sorted --organize-by ext
 
 # 按修改时间保留最新的一份，并优先保留 ./photos/keep 目录
 dfcleaner -d ./photos --yes --keep-strategy newest --prefer ./photos/keep
@@ -105,6 +109,8 @@ dfcleaner -d ./photos --yes --json
 | `--max-delete-ratio <ratio>` | 允许删除比例上限（0-1），超限中止 |
 | `--trash <dir>` | 回收站目录，设置后删除改为移动 |
 | `--restore <dir>` | 从回收站还原（默认预览，`--yes` 执行） |
+| `--organize <dir>` | 归类整理的目标目录，设置后把剩余文件移动到该目录 |
+| `--organize-by <by>` | 归类维度：`ext` / `type` / `year` / `month`，默认 `ext` |
 | `--watch` | 监听目录变化并自动重复清理 |
 | `--report <file>` | 输出 JSON 报告 |
 | `--json` | 以 JSON 输出完整结果 |
@@ -169,7 +175,7 @@ const result = await clean(
 );
 ```
 
-主要导出：`clean` / `cleaner`（兼容别名）、`resolveConfig`、`getConfig`、`scanFiles`、`detectExactDuplicates` / `detectDuplicates`、`detectDuplicateDirs`、`detectSimilarImages`、`hashFile`、`HashCache`、`imageHash`、`hammingDistance`、`selectKeep`、`deleteFiles`、`removeEmptyDirs`、`writeTrashManifest`、`restoreFromTrash`、`ConsoleReporter`、`JsonReporter` 以及全部类型定义。
+主要导出：`clean` / `cleaner`（兼容别名）、`resolveConfig`、`getConfig`、`scanFiles`、`detectExactDuplicates` / `detectDuplicates`、`detectDuplicateDirs`、`detectSimilarImages`、`hashFile`、`HashCache`、`imageHash`、`hammingDistance`、`selectKeep`、`deleteFiles`、`removeEmptyDirs`、`writeManifest`、`writeTrashManifest`、`restoreFromTrash`、`planOrganize`、`organizeFiles`、`ConsoleReporter`、`JsonReporter` 以及全部类型定义。
 
 ## 配置
 
@@ -226,6 +232,10 @@ module.exports = {
   maxDeleteRatio: 0,
   /** 回收站目录 */
   trashDir: null,
+  /** 归类整理的目标目录，null 表示不做归类 */
+  organizeDir: null,
+  /** 归类维度：ext | type | year | month */
+  organizeBy: 'ext',
   /** 是否显示进度（TTY 下生效） */
   progress: true,
   /** JSON 报告输出路径 */

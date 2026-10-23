@@ -9,9 +9,10 @@ import {
 } from "./detector";
 import { CleanerError, errorMessage } from "./error";
 import { deleteFiles, removeEmptyDirs } from "./executor";
+import { organizeFiles } from "./organizer";
 import { silentReporter } from "./reporter";
 import { scanFiles } from "./scanner";
-import { writeTrashManifest } from "./trash";
+import { writeManifest, writeTrashManifest } from "./trash";
 import type {
   CleanOptions,
   CleanResult,
@@ -21,6 +22,7 @@ import type {
   DuplicateDirGroup,
   DuplicateGroup,
   FileInfo,
+  MoveRecord,
   Reporter,
   SimilarGroup,
   UserConfig,
@@ -118,15 +120,27 @@ const buildStats = (params: {
   smallFiles: FileInfo[];
   targets: Array<{ file: FileInfo }>;
   deleted: DeleteRecord[];
+  moved: MoveRecord[];
   removedEmptyDirs: DeleteRecord[];
   cache: HashCache | null;
   hardlinksSkipped: number;
 }): CleanStats => {
-  const { scan, outcome, smallFiles, targets, deleted, removedEmptyDirs, cache, hardlinksSkipped } =
-    params;
+  const {
+    scan,
+    outcome,
+    smallFiles,
+    targets,
+    deleted,
+    moved,
+    removedEmptyDirs,
+    cache,
+    hardlinksSkipped,
+  } = params;
   const succeeded = deleted.filter(
     (record) => record.status === "deleted" || record.status === "trashed"
   );
+  // 预览模式下的 planned 记录同样计入，保证 dry-run 与执行结果一致
+  const movedOk = moved.filter((record) => record.status !== "failed");
 
   return {
     totalFiles: scan.files + smallFiles.length,
@@ -147,6 +161,8 @@ const buildStats = (params: {
     duplicateDirs: outcome.dirGroups.length,
     similarGroups: outcome.similarGroups.length,
     cacheHits: cache?.hits || 0,
+    movedFiles: movedOk.length,
+    movedBytes: movedOk.reduce((total, record) => total + record.size, 0),
     errors: scan.errors,
   };
 };
@@ -180,6 +196,8 @@ const createReport = (result: CleanResult) => ({
   })),
   deleted: result.deleted,
   removedEmptyDirs: result.removedEmptyDirs,
+  moved: result.moved,
+  organize: result.organize,
 });
 
 const writeReport = async (filePath: string, result: CleanResult): Promise<void> => {
@@ -266,6 +284,24 @@ export const clean = async (
   const deletedPaths = new Set(
     deleted.filter((record) => record.status !== "failed").map((record) => record.path)
   );
+
+  // 删除完成后再整理剩余文件，避免把待删除文件先移走导致删除失败
+  const organize =
+    config.organizeDir === null
+      ? null
+      : await organizeFiles(
+          scan.files.filter((file) => !deletedPaths.has(file.path)),
+          config,
+          reporter,
+          options.signal
+        );
+
+  const moved = organize?.moves ?? [];
+  // 被移走的文件同样会让目录变空，需参与空目录判定
+  for (const record of moved) {
+    if (record.status !== "failed") deletedPaths.add(record.from);
+  }
+
   const removedEmptyDirs = config.isDelEmptyDir
     ? await removeEmptyDirs(scan.dirs, executeOptions, deletedPaths, reporter)
     : [];
@@ -275,6 +311,20 @@ export const clean = async (
       await writeTrashManifest(config.trashDir, commonAncestor(config.baseDirs), deleted);
     } catch (err) {
       reporter.onWarning?.(`写入回收站清单失败：${errorMessage(err)}`);
+    }
+  }
+
+  if (config.organizeDir && !config.dryRun) {
+    try {
+      await writeManifest(
+        config.organizeDir,
+        commonAncestor(config.baseDirs),
+        moved
+          .filter((record) => record.status === "moved")
+          .map((record) => ({ from: record.from, to: record.to, size: record.size }))
+      );
+    } catch (err) {
+      reporter.onWarning?.(`写入归类清单失败：${errorMessage(err)}`);
     }
   }
 
@@ -298,12 +348,15 @@ export const clean = async (
     similarGroups: outcome.similarGroups,
     deleted,
     removedEmptyDirs,
+    moved,
+    organize: organize?.summary ?? null,
     stats: buildStats({
       scan: scan.stats,
       outcome,
       smallFiles,
       targets,
       deleted,
+      moved,
       removedEmptyDirs,
       cache,
       hardlinksSkipped,

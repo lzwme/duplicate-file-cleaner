@@ -46,6 +46,28 @@ test('CLI --yes 执行真实删除，并清理空目录', () => {
   }
 });
 
+test('CLI --organize 按维度归类剩余文件', () => {
+  const dir = makeTmpDir();
+  const out = makeTmpDir();
+  try {
+    writeTree(dir, { 'a.txt': 'a', 'sub/b.md': 'b' });
+
+    const result = JSON.parse(
+      runCli(['-d', dir, '-y', '--organize', out, '--organize-by', 'ext', '--json', '-q'], dir)
+    );
+
+    assert.strictEqual(result.config.organizeDir, out);
+    assert.strictEqual(result.config.organizeBy, 'ext');
+    assert.strictEqual(result.stats.movedFiles, 2);
+    assert.ok(exists(path.join(out, 'txt', 'a.txt')));
+    assert.ok(exists(path.join(out, 'md', 'b.md')));
+    assert.ok(!exists(path.join(dir, 'a.txt')));
+  } finally {
+    cleanup(dir);
+    cleanup(out);
+  }
+});
+
 test('CLI --no-compare-all-dir 可真正关闭跨目录比较', () => {
   const dir = makeTmpDir();
   try {

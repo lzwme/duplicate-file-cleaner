@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### 新增
+
+- **归类整理**：`organizeDir` / `organizeBy` 与 `--organize <dir>` / `--organize-by <by>`，清理完成后把剩余文件按 `ext` / `type` / `year` / `month` 移动到目标目录，同名文件自动追加序号不覆盖。
+- `CleanResult` 新增 `moved` 与 `organize`，`CleanStats` 新增 `movedFiles` / `movedBytes`，报告 JSON 同步输出。
+- 归类清单复用 trash manifest 格式（`writeManifest`），因此可用 `--restore <organizeDir>` 一键还原。
+- 新增 `organizer` 模块（`planOrganize` / `organizeFiles` / `categorize`）并对齐导出。
+
 ## 2.2.0
 
 ### 新增

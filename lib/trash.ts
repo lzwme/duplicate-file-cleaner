@@ -7,11 +7,13 @@ import { toPosix } from "./utils";
 const MANIFEST_PREFIX = ".dfcleaner-manifest-";
 const MANIFEST_VERSION = 1;
 
-interface TrashManifestEntry {
+export interface ManifestEntry {
   from: string;
   to: string;
   size: number;
 }
+
+type TrashManifestEntry = ManifestEntry;
 
 export interface TrashManifest {
   version: number;
@@ -32,16 +34,15 @@ export interface RestoreResult {
 const manifestName = (date = new Date()): string =>
   `${MANIFEST_PREFIX}${date.toISOString().replace(/[:.]/g, "-")}.json`;
 
-/** 记录本次移入回收站的文件，便于 restore 精确还原 */
-export const writeTrashManifest = async (
-  trashDir: string,
+/**
+ * 写入可被 restore 消费的移动清单。
+ * 回收站与目录归类共用同一格式，因此归类结果同样可以一键还原。
+ */
+export const writeManifest = async (
+  dir: string,
   baseDir: string,
-  records: DeleteRecord[]
+  entries: ManifestEntry[]
 ): Promise<string | null> => {
-  const entries: TrashManifestEntry[] = records
-    .filter((record) => record.status === "trashed" && record.trashedTo)
-    .map((record) => ({ from: record.path, to: record.trashedTo as string, size: record.size }));
-
   if (!entries.length) return null;
 
   const manifest: TrashManifest = {
@@ -51,10 +52,23 @@ export const writeTrashManifest = async (
     entries,
   };
 
-  await fs.promises.mkdir(trashDir, { recursive: true });
-  const filePath = path.join(trashDir, manifestName());
+  await fs.promises.mkdir(dir, { recursive: true });
+  const filePath = path.join(dir, manifestName());
   await fs.promises.writeFile(filePath, JSON.stringify(manifest, null, 2), "utf8");
   return filePath;
+};
+
+/** 记录本次移入回收站的文件，便于 restore 精确还原 */
+export const writeTrashManifest = async (
+  trashDir: string,
+  baseDir: string,
+  records: DeleteRecord[]
+): Promise<string | null> => {
+  const entries: ManifestEntry[] = records
+    .filter((record) => record.status === "trashed" && record.trashedTo)
+    .map((record) => ({ from: record.path, to: record.trashedTo as string, size: record.size }));
+
+  return writeManifest(trashDir, baseDir, entries);
 };
 
 /** 列出回收站中的 manifest（新到旧） */

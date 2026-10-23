@@ -10,6 +10,7 @@ export * from "./image-hash";
 export * from "./policy";
 export * from "./detector";
 export * from "./executor";
+export * from "./organizer";
 export * from "./trash";
 export * from "./reporter";
 export * from "./cleaner";

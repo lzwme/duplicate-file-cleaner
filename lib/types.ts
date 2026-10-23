@@ -31,6 +31,11 @@ export type DetectMode = "exact" | "dir" | "both";
 
 export const DETECT_MODES: readonly DetectMode[] = ["exact", "dir", "both"];
 
+/** 目录归类维度 */
+export type OrganizeBy = "ext" | "type" | "year" | "month";
+
+export const ORGANIZE_BY: readonly OrganizeBy[] = ["ext", "type", "year", "month"];
+
 /** 进度信息 */
 export interface ProgressInfo {
   phase: "scan" | "hash" | "dir" | "similar" | "delete";
@@ -144,6 +149,10 @@ export interface CleanerConfig {
   deleteSimilarImages: boolean;
   /** 是否输出进度 */
   progress: boolean;
+  /** 归类整理的目标目录，null 表示不做归类 */
+  organizeDir: string | null;
+  /** 归类维度 */
+  organizeBy: OrganizeBy;
   /** 是否静默 */
   silent: boolean;
   /** 是否调试 */
@@ -171,6 +180,26 @@ export interface ResolveConfigOptions {
 
 /** 删除状态 */
 export type DeleteStatus = "deleted" | "trashed" | "planned" | "failed";
+
+/** 归类移动记录 */
+export interface MoveRecord {
+  from: string;
+  to: string;
+  /** 原始相对路径（带根标签） */
+  relPath: string;
+  size: number;
+  /** 归类后的分类名 */
+  category: string;
+  status: "moved" | "planned" | "failed";
+  error?: string;
+}
+
+/** 归类汇总 */
+export interface OrganizeSummary {
+  by: OrganizeBy;
+  target: string;
+  categories: Record<string, { files: number; bytes: number }>;
+}
 
 /** 单条删除记录 */
 export interface DeleteRecord {
@@ -245,6 +274,10 @@ export interface CleanStats {
   similarGroups: number;
   /** 哈希缓存命中次数 */
   cacheHits: number;
+  /** 归类移动的文件数（含预览） */
+  movedFiles: number;
+  /** 归类移动的字节数（含预览） */
+  movedBytes: number;
   errors: ScanError[];
 }
 
@@ -261,6 +294,10 @@ export interface CleanResult {
   similarGroups: SimilarGroup[];
   deleted: DeleteRecord[];
   removedEmptyDirs: DeleteRecord[];
+  /** 归类整理产生的移动记录 */
+  moved: MoveRecord[];
+  /** 归类汇总，未开启归类时为 null */
+  organize: OrganizeSummary | null;
   stats: CleanStats;
 }
 
@@ -273,6 +310,7 @@ export interface Reporter {
   onSimilarGroup?(group: SimilarGroup): void;
   onDelete?(record: DeleteRecord): void;
   onEmptyDir?(record: DeleteRecord): void;
+  onMove?(record: MoveRecord): void;
   onProgress?(info: ProgressInfo): void;
   onWarning?(message: string): void;
   summary?(result: CleanResult): void;

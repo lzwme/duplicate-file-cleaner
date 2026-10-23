@@ -196,6 +196,70 @@ test('回收站清单可用于还原', async () => {
   }
 });
 
+test('归类整理：默认预览，执行后按扩展名移动且可还原', async () => {
+  const dir = makeTmpDir();
+  const organizeDir = makeTmpDir();
+  try {
+    writeTree(dir, { 'a.txt': 'a', 'sub/b.txt': 'b', 'sub/c.md': 'c' });
+
+    const preview = await clean({ ...baseConfig(dir), organizeDir });
+    assert.strictEqual(preview.organize.by, 'ext');
+    assert.strictEqual(preview.organize.target, organizeDir);
+    assert.strictEqual(preview.moved.length, 3);
+    assert.ok(preview.moved.every((record) => record.status === 'planned'));
+    assert.strictEqual(preview.stats.movedFiles, 3);
+    assert.ok(exists(path.join(dir, 'a.txt')));
+    assert.ok(!exists(path.join(organizeDir, 'txt')));
+
+    const result = await clean({ ...baseConfig(dir), organizeDir, dryRun: false });
+    assert.strictEqual(result.stats.movedFiles, 3);
+    assert.ok(result.moved.every((record) => record.status === 'moved'));
+    assert.ok(exists(path.join(organizeDir, 'txt', 'a.txt')));
+    assert.ok(exists(path.join(organizeDir, 'txt', 'b.txt')));
+    assert.ok(exists(path.join(organizeDir, 'md', 'c.md')));
+    assert.ok(!exists(path.join(dir, 'a.txt')));
+    assert.ok(!exists(path.join(dir, 'sub', 'c.md')));
+
+    const restored = await restoreFromTrash(organizeDir, { dryRun: false });
+    assert.strictEqual(restored.restored.length, 3);
+    assert.ok(exists(path.join(dir, 'a.txt')));
+    assert.ok(exists(path.join(dir, 'sub', 'c.md')));
+  } finally {
+    cleanup(dir);
+    cleanup(organizeDir);
+  }
+});
+
+test('归类整理：删除目标不会被移动，同名文件不覆盖', async () => {
+  const dir = makeTmpDir();
+  const organizeDir = makeTmpDir();
+  try {
+    writeTree(dir, {
+      'keep/a.txt': 'same',
+      'remove/a.txt': 'same',
+      'other/b.md': 'b',
+    });
+
+    const result = await clean({
+      ...baseConfig(dir),
+      organizeDir,
+      organizeBy: 'type',
+      preferDirs: [path.join(dir, 'keep')],
+      dryRun: false,
+    });
+
+    assert.strictEqual(result.stats.deletedFiles, 1);
+    assert.strictEqual(result.stats.movedFiles, 2);
+    assert.ok(exists(path.join(organizeDir, 'document', 'a.txt')));
+    assert.ok(exists(path.join(organizeDir, 'document', 'b.md')));
+    assert.ok(!exists(path.join(organizeDir, 'document', 'a.1.txt')));
+    assert.ok(!exists(path.join(organizeDir, 'document', 'remove', 'a.txt')));
+  } finally {
+    cleanup(dir);
+    cleanup(organizeDir);
+  }
+});
+
 test('新配置项默认值与校验', () => {
   const config = resolveConfig({ configPath: null });
 
@@ -205,7 +269,22 @@ test('新配置项默认值与校验', () => {
   assert.strictEqual(config.similarThreshold, 5);
   assert.strictEqual(config.cacheFile, null);
   assert.strictEqual(config.progress, true);
+  assert.strictEqual(config.organizeDir, null);
+  assert.strictEqual(config.organizeBy, 'ext');
 
   assert.strictEqual(resolveConfig({ configPath: null, similarThreshold: 100 }).similarThreshold, 64);
   assert.throws(() => resolveConfig({ configPath: null, detect: 'nope' }), /非法的检测模式/);
+  assert.throws(() => resolveConfig({ configPath: null, organizeBy: 'nope' }), /非法的归类维度/);
+});
+
+test('organizeDir 不能与根目录相同', () => {
+  const dir = makeTmpDir();
+  try {
+    assert.throws(
+      () => resolveConfig({ configPath: null, baseDir: dir, organizeDir: dir }),
+      /organizeDir 不能与任何根目录相同/
+    );
+  } finally {
+    cleanup(dir);
+  }
 });

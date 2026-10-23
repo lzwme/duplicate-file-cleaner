@@ -226,6 +226,14 @@ export class ConsoleReporter implements Reporter {
       );
     }
 
+    if (result.organize) {
+      const action = result.dryRun ? "待归类" : "已归类";
+      console.log(
+        `  ${action} ${stats.movedFiles} 个文件（${formatBytes(stats.movedBytes)}）` +
+          ` → ${result.organize.target}（按 ${result.organize.by} 分 ${Object.keys(result.organize.categories).length} 类）`
+      );
+    }
+
     if (stats.skippedSmallFiles > 0) {
       console.log(
         `  跳过 ${stats.skippedSmallFiles} 个小于 ${formatBytes(result.config.minFileSize)} 的文件`
